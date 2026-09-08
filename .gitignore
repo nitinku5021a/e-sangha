@@ -1,0 +1,30 @@
+# Gradle caches
+.gradle/
+**/.gradle/
+
+# Build outputs
+build/
+**/build/
+
+# Generated Android release artifacts
+*.apk
+*.aab
+app/release/
+
+# Android Studio
+.idea/
+*.iml
+
+# Local machine configuration
+local.properties
+
+# Native/CMake build files
+.externalNativeBuild/
+.cxx/
+
+# Temporary files
+*.tmp
+tmp_test.txt
+
+# Local backend data
+backend/data/

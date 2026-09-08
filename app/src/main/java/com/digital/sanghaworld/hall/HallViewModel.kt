@@ -1,0 +1,440 @@
+package com.digital.sanghaworld.hall
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import com.digital.sanghaworld.auth.TokenStore
+import androidx.lifecycle.viewModelScope
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+data class HallUiState(
+    val discovery: HallDiscovery = HallDiscovery(emptyList(), emptyList(), emptyList()),
+    val selectedHall: Hall? = null,
+    val selectedSchedule: HallSchedule? = null,
+    val selectedJoined: Boolean = false,
+    val selectedParticipantCount: Int = 0,
+    val selectedNextStart: Long = 0,
+    val selectedRemaining: Long? = null,
+    val stats: HallStats = HallStats(0, 0, 0, 0),
+    val logs: List<MeditationLogEntry> = emptyList(),
+    val supporter: SupporterProfile? = null,
+    val supportRequests: List<SupportRequest> = emptyList(),
+    val relationships: List<SupportRelationship> = emptyList(),
+    val profile: UserProfile? = null,
+    val sittingHallName: String? = null,
+    val sittingParticipants: List<ParticipantPresence> = emptyList(),
+    val sittingCount: Int = 0
+)
+
+class HallViewModel(application: Application) : AndroidViewModel(application) {
+    private val store = HallStore(application)
+    private val tokens = TokenStore(application)
+    private val api = HallApi(tokens)
+    private val engine = SessionEngine()
+    private val _state = MutableStateFlow(HallUiState())
+    val state: StateFlow<HallUiState> = _state.asStateFlow()
+    private var useRemote = false
+
+    var activeSessionId: String? = null
+        private set
+    var activeHallId: String? = null
+        private set
+    var sessionJoinMillis: Long = 0
+        private set
+
+    init {
+        refresh()
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            val ui = withContext(Dispatchers.IO) {
+                connectRemote()
+                if (useRemote) remoteUi() else toUi(store.load())
+            }
+            _state.value = ui
+        }
+    }
+
+    private fun connectRemote() {
+        if (useRemote) return
+        useRemote = api.isConfigured() && runCatching { api.me() }.isSuccess
+    }
+
+    private fun remoteUi(selectedId: String? = _state.value.selectedHall?.id): HallUiState {
+        val disc = api.halls()
+        val logs = runCatching { api.logs() }.getOrDefault(emptyList())
+        val reqs = runCatching { api.listSupportRequests() }.getOrDefault(emptyList())
+        val rels = runCatching { api.relationships() }.getOrDefault(emptyList())
+        val card = selectedId?.let {
+            (disc.sittingNow + disc.startingSoon + disc.myHalls).firstOrNull { c -> c.hall.id == it }
+                ?: runCatching { api.getHall(it) }.getOrNull()
+        }
+        return HallUiState(
+            discovery = disc,
+            selectedHall = card?.hall,
+            selectedSchedule = card?.schedule,
+            selectedJoined = card?.joined == true,
+            selectedParticipantCount = card?.participantCount ?: 0,
+            selectedNextStart = card?.nextStartMillis ?: 0,
+            selectedRemaining = card?.remainingSeconds,
+            logs = logs,
+            supportRequests = reqs,
+            relationships = rels,
+            profile = UserProfile(
+                id = api.currentUserId(),
+                displayName = tokens.displayName ?: "You"
+            ),
+            sittingHallName = _state.value.sittingHallName,
+            sittingParticipants = _state.value.sittingParticipants,
+            sittingCount = _state.value.sittingCount
+        )
+    }
+
+    fun openHall(hallId: String) {
+        viewModelScope.launch {
+            val ui = withContext(Dispatchers.IO) {
+                connectRemote()
+                if (useRemote) remoteUi(hallId) else {
+                    val s = store.load()
+                    val disc = store.discovery(s)
+                    val card = (disc.sittingNow + disc.startingSoon + disc.myHalls).firstOrNull { it.hall.id == hallId }
+                        ?: return@withContext _state.value
+                    val stats = hallStats(s, hallId)
+                    _state.value.copy(
+                        discovery = disc,
+                        selectedHall = card.hall,
+                        selectedSchedule = card.schedule,
+                        selectedJoined = card.joined,
+                        selectedParticipantCount = card.participantCount,
+                        selectedNextStart = card.nextStartMillis,
+                        selectedRemaining = card.remainingSeconds,
+                        stats = stats,
+                        logs = s.logs,
+                        supporter = s.supporter,
+                        supportRequests = s.supportRequests,
+                        relationships = s.relationships,
+                        profile = s.profile
+                    )
+                }
+            }
+            _state.value = ui
+        }
+    }
+
+    fun joinHall(hallId: String) {
+        if (useRemote) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { api.joinHall(hallId) }
+                openHall(hallId)
+            }
+            return
+        }
+        mutate { s ->
+            if (s.memberships.any { it.hallId == hallId && it.userId == s.profile.id }) s
+            else s.copy(memberships = s.memberships + HallMembership(hallId, s.profile.id))
+        }
+        openHall(hallId)
+    }
+
+    fun leaveHall(hallId: String) {
+        if (useRemote) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { api.leaveHall(hallId) }
+                openHall(hallId)
+            }
+            return
+        }
+        mutate { s ->
+            s.copy(memberships = s.memberships.filterNot { it.hallId == hallId && it.userId == s.profile.id })
+        }
+        openHall(hallId)
+    }
+
+    fun createHall(
+        name: String,
+        description: String,
+        durationMinutes: Int,
+        hour: Int,
+        minute: Int,
+        scheduleType: ScheduleType,
+        days: Set<DayOfWeek>,
+        visibility: HallVisibility,
+        audioType: AudioType
+    ): String {
+        if (useRemote) {
+            return api.createHall(name, description, durationMinutes, hour, minute, scheduleType, days, visibility, audioType)
+        }
+        val hallId = HallIds.newId()
+        mutate { s ->
+            val hall = Hall(
+                id = hallId,
+                creatorId = s.profile.id,
+                name = name.trim().ifBlank { "Untitled hall" },
+                description = description.trim(),
+                visibility = visibility,
+                durationSeconds = (durationMinutes.coerceIn(1, 240)) * 60,
+                timezone = ZoneId.systemDefault().id,
+                shareCode = HallIds.shareCode(),
+                audioType = audioType
+            )
+            val schedule = HallSchedule(
+                id = HallIds.newId(),
+                hallId = hallId,
+                scheduleType = scheduleType,
+                startLocalTime = LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)),
+                timezone = hall.timezone,
+                daysOfWeek = days
+            )
+            val membership = HallMembership(hallId, s.profile.id)
+            s.copy(
+                halls = s.halls + hall,
+                schedules = s.schedules + schedule,
+                memberships = s.memberships + membership
+            )
+        }
+        return hallId
+    }
+
+    /**
+     * Returns remaining duration in millis for TimerService, or null if not yet started
+     * (caller should wait / start at scheduled time with full duration).
+     */
+    fun enterSession(hallId: String): Long? {
+        if (useRemote) {
+            val (sessionId, remaining) = api.ensureAndJoinSession(hallId)
+            activeSessionId = sessionId
+            activeHallId = hallId
+            sessionJoinMillis = SessionClock.nowMillis()
+            val hall = runCatching { api.getHall(hallId).hall }.getOrNull()
+            _state.value = _state.value.copy(
+                sittingHallName = hall?.name,
+                sittingCount = 1,
+                sittingParticipants = listOf(ParticipantPresence(api.currentUserId(), "You", DisplayMode.AVATAR))
+            )
+            return remaining
+        }
+        val s = store.load()
+        val hall = s.halls.firstOrNull { it.id == hallId } ?: return null
+        val schedule = s.schedules.firstOrNull { it.hallId == hallId } ?: return null
+        val now = SessionClock.nowMillis()
+        val start = store.nextOccurrence(schedule, hall.durationSeconds, now) ?: return null
+        val remaining = SessionClock.remainingSeconds(start, hall.durationSeconds, now)
+        val sessionId = "$hallId-$start"
+        engine.handleSessionStarted(start, hall.durationSeconds)
+        activeSessionId = sessionId
+        activeHallId = hallId
+        sessionJoinMillis = now
+        val presence = syntheticPresence(s, hall, remaining > 0)
+        _state.value = _state.value.copy(
+            sittingHallName = hall.name,
+            sittingParticipants = presence,
+            sittingCount = presence.size + if (remaining > 0) 12 else 4
+        )
+        mutate { st ->
+            val already = st.attendance.any { it.sessionId == sessionId && it.userId == st.profile.id && it.leftAtMillis == null }
+            if (already) st
+            else st.copy(
+                attendance = st.attendance + Attendance(
+                    id = HallIds.newId(),
+                    sessionId = sessionId,
+                    userId = st.profile.id,
+                    hallId = hallId,
+                    joinedAtMillis = now
+                )
+            )
+        }
+        val remainingMillis = remaining * 1000L
+        return remainingMillis.coerceAtLeast(1_000L)
+    }
+
+    fun completeSession(attendedMillis: Long) {
+        val sessionId = activeSessionId ?: return
+        val hallId = activeHallId ?: return
+        if (useRemote) {
+            runCatching { api.leaveSession(sessionId) }
+            activeSessionId = null
+            activeHallId = null
+            _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0)
+            refresh()
+            return
+        }
+        val now = SessionClock.nowMillis()
+        mutate { s ->
+            val hall = s.halls.firstOrNull { it.id == hallId }
+            val durationSeconds = hall?.durationSeconds ?: (attendedMillis / 1000).toInt()
+            val attendedSec = (attendedMillis / 1000).toInt().coerceAtLeast(1)
+            val threshold = (durationSeconds * 0.9).toInt()
+            val completion = if (attendedSec >= threshold) CompletionStatus.COMPLETED else CompletionStatus.PARTIAL
+            val updatedAttendance = s.attendance.map {
+                if (it.sessionId == sessionId && it.userId == s.profile.id && it.leftAtMillis == null) {
+                    it.copy(
+                        leftAtMillis = now,
+                        attendedDurationSeconds = attendedSec,
+                        completionStatus = completion
+                    )
+                } else it
+            }
+            val log = MeditationLogEntry(
+                id = HallIds.newId(),
+                userId = s.profile.id,
+                sessionId = sessionId,
+                hallId = hallId,
+                hallName = hall?.name ?: "Hall",
+                date = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate(),
+                durationSeconds = attendedSec,
+                completionStatus = completion
+            )
+            s.copy(attendance = updatedAttendance, logs = listOf(log) + s.logs)
+        }
+        engine.handleSessionCompleted()
+        activeSessionId = null
+        activeHallId = null
+        _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0)
+        refresh()
+    }
+
+    fun setSupporterEnabled(enabled: Boolean) {
+        if (useRemote) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { api.setSupporter(enabled) }
+                refresh()
+            }
+            return
+        }
+        mutate { s -> s.copy(supporter = s.supporter.copy(enabled = enabled)) }
+    }
+
+    fun requestSupport(durationMinutes: Int, sameHallOnly: Boolean) {
+        if (useRemote) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { api.requestSupport(durationMinutes, sameHallOnly) }
+                refresh()
+            }
+            return
+        }
+        mutate { s ->
+            val request = SupportRequest(
+                id = HallIds.newId(),
+                requesterId = s.profile.id,
+                status = if (s.supporter.enabled) SupportRequestStatus.MATCHED else SupportRequestStatus.OPEN,
+                preferredDurationMinutes = durationMinutes,
+                language = "en",
+                sameHallOnly = sameHallOnly,
+                matchedSupporterId = if (s.supporter.enabled) s.profile.id else "community-sitter"
+            )
+            val rels = if (request.status == SupportRequestStatus.MATCHED) {
+                s.relationships + SupportRelationship(
+                    id = HallIds.newId(),
+                    supporterId = request.matchedSupporterId ?: s.profile.id,
+                    supportedUserId = s.profile.id
+                )
+            } else s.relationships
+            s.copy(supportRequests = s.supportRequests + request, relationships = rels)
+        }
+    }
+
+    fun cancelSupport(requestId: String) {
+        if (useRemote) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { api.cancelSupport(requestId) }
+                refresh()
+            }
+            return
+        }
+        mutate { s ->
+            s.copy(supportRequests = s.supportRequests.map {
+                if (it.id == requestId) it.copy(status = SupportRequestStatus.CANCELLED) else it
+            })
+        }
+    }
+
+    fun createPrivateSupportHall(): String {
+        return createHall(
+            name = "Private support sit",
+            description = "A silent sitting for two. No conversation during meditation.",
+            durationMinutes = 60,
+            hour = LocalTime.now().hour,
+            minute = ((LocalTime.now().minute / 5) * 5),
+            scheduleType = ScheduleType.ONCE,
+            days = emptySet(),
+            visibility = HallVisibility.PRIVATE,
+            audioType = AudioType.BELL
+        )
+    }
+
+    fun findByShareCode(code: String): String? {
+        if (useRemote) return runCatching { api.hallByCode(code) }.getOrNull()
+        val s = store.load()
+        return s.halls.firstOrNull { it.shareCode.equals(code.trim(), ignoreCase = true) }?.id
+    }
+
+    private fun mutate(block: (HallState) -> HallState) {
+        val next = synchronized(store) {
+            val current = store.load()
+            val updated = block(current)
+            store.save(updated)
+            updated
+        }
+        _state.value = toUi(next).copy(
+            selectedHall = _state.value.selectedHall?.let { sel -> next.halls.firstOrNull { it.id == sel.id } },
+            sittingHallName = _state.value.sittingHallName,
+            sittingParticipants = _state.value.sittingParticipants,
+            sittingCount = _state.value.sittingCount
+        )
+    }
+
+    private fun toUi(s: HallState): HallUiState {
+        val disc = store.discovery(s)
+        val selected = _state.value.selectedHall
+        val card = selected?.let { (disc.sittingNow + disc.startingSoon + disc.myHalls).firstOrNull { c -> c.hall.id == it.id } }
+        return HallUiState(
+            discovery = disc,
+            selectedHall = card?.hall ?: selected,
+            selectedSchedule = card?.schedule ?: _state.value.selectedSchedule,
+            selectedJoined = card?.joined ?: false,
+            selectedParticipantCount = card?.participantCount ?: 0,
+            selectedNextStart = card?.nextStartMillis ?: 0,
+            selectedRemaining = card?.remainingSeconds,
+            stats = selected?.let { hallStats(s, it.id) } ?: HallStats(0, 0, 0, 0),
+            logs = s.logs,
+            supporter = s.supporter,
+            supportRequests = s.supportRequests,
+            relationships = s.relationships,
+            profile = s.profile,
+            sittingHallName = _state.value.sittingHallName,
+            sittingParticipants = _state.value.sittingParticipants,
+            sittingCount = _state.value.sittingCount
+        )
+    }
+
+    private fun hallStats(s: HallState, hallId: String): HallStats {
+        val att = s.attendance.filter { it.hallId == hallId }
+        val logs = s.logs.filter { it.hallId == hallId }
+        return HallStats(
+            sessionCount = logs.map { it.sessionId }.distinct().size,
+            totalAttendance = att.size,
+            uniqueParticipants = att.map { it.userId }.distinct().size.coerceAtLeast(if (att.isEmpty()) 0 else 1),
+            totalMeditationSeconds = logs.sumOf { it.durationSeconds.toLong() }
+        )
+    }
+
+    private fun syntheticPresence(s: HallState, hall: Hall, active: Boolean): List<ParticipantPresence> {
+        val names = listOf("Nitin", "Prashant", "Rahul", "Maya", "Arun", "Leela", "Sam")
+        val count = if (active) 5 else 3
+        val you = ParticipantPresence(s.profile.id, s.profile.displayName, s.profile.displayMode)
+        val others = names.take(count).mapIndexed { i, n ->
+            ParticipantPresence("p$i-${hall.id}", n, if (i % 3 == 0) DisplayMode.SNAPSHOT else DisplayMode.AVATAR)
+        }
+        return listOf(you) + others
+    }
+}

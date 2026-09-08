@@ -1,0 +1,30 @@
+Vipassana Timer is a quiet companion for sitting in silence. It keeps time in the background, sounds a gong at the right moments, and stays out of the way.
+
+This app is an independent timer. It is not affiliated with any Vipassana organization, center, or teacher.
+
+SIT
+Choose 15 minutes, 30 minutes, 45 minutes, 1 hour, 2 hours, or a custom length. An 8-second settling period comes first, then a single gong begins the sit. A large analog ring and digital clock show time remaining. For sits longer than 30 minutes, another gong sounds 5 minutes before the end. When the sit is complete, the chosen gong plays three times, each strike in full, with a 2-second pause between them.
+
+The timer keeps running if the screen is off or you leave the app. A small notification shows that a sit is in progress.
+
+GONGS
+Start, interval, and end all use the same chosen sound. Each strike plays all the way through. Pick a gong in settings, preview it, and set it. Several sounds are included, including a Dhamma gong as the default.
+
+BE AWARE ALWAYS
+Set a span of hours and a gong interval. A gentle reminder sounds through the day so you can return to awareness while walking, working, or resting. End the period whenever you like.
+
+MEDITATION LOG
+Each completed sit is stored only on your device, totaled by day. Open the log to see how much you sat and how many sits that day held. Delete any day you no longer want to keep. Nothing is sent to a server.
+
+DONATE
+The app is free. There is no paywall and no extra features behind a purchase. If you wish, you may make a voluntary donation through Google Play. You choose how many units to give.
+
+WHAT THIS APP DOES NOT DO
+• No guided talk during the sit
+• No social feed or cloud account
+• No ads
+• No tracking for advertising
+
+A sit needs only a timer you can trust. This one aims to be that.
+
+Notifications are used so the timer can continue in the background. You can turn them off in system settings; the sit may then be paused by Android when the app is not open.

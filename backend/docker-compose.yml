@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: meditation
+      POSTGRES_USER: meditation
+      POSTGRES_PASSWORD: meditation
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      JDBC_URL: jdbc:postgresql://postgres:5432/meditation
+      JDBC_USER: meditation
+      JDBC_PASSWORD: meditation
+
+volumes:
+  pgdata:

@@ -1,0 +1,6 @@
+• Choose and preview gong sounds; each strike plays in full
+• End of sit: three gongs with a 2-second pause, including with the screen off
+• Meditation log now adds every sit in a day, with sit count
+• Delete any day from the log
+• Voluntary Donate screen via Google Play
+• Calmer menu and screens
