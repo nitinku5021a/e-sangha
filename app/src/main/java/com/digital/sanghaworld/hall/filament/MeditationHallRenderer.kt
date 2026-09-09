@@ -4,7 +4,7 @@ import android.content.Context
 import android.opengl.Matrix
 import android.view.Choreographer
 import android.view.Surface
-import android.view.SurfaceView
+import android.view.TextureView
 import com.digital.sanghaworld.hall.MeditationHallState
 import com.digital.sanghaworld.hall.SeatLayout
 import com.google.android.filament.Camera
@@ -32,7 +32,7 @@ import kotlin.math.sin
 
 class MeditationHallRenderer(
     context: Context,
-    private val surfaceView: SurfaceView
+    private val textureView: TextureView
 ) {
     companion object {
         init { Filament.init() }
@@ -96,15 +96,13 @@ class MeditationHallRenderer(
         MaterialBuilder.init()
         lit = compile(
             "hall_lit",
-            MaterialBuilder.Shading.LIT,
-            MaterialBuilder.BlendingMode.TRANSPARENT,
+            MaterialBuilder.Shading.UNLIT,
+            MaterialBuilder.BlendingMode.OPAQUE,
             """
             void material(inout MaterialInputs material) {
                 prepareMaterial(material);
                 vec4 c = texture(materialParams_albedo, getUV0());
-                material.baseColor = vec4(c.rgb, materialParams.opacity);
-                material.roughness = 0.72;
-                material.metallic = 0.0;
+                material.baseColor = vec4(c.rgb * materialParams.opacity, 1.0);
             }
             """.trimIndent()
         )
@@ -129,7 +127,7 @@ class MeditationHallRenderer(
             override fun onNativeWindowChanged(surface: Surface) {
                 swapChain?.let { engine.destroySwapChain(it) }
                 swapChain = engine.createSwapChain(surface)
-                displayHelper.attach(renderer, surfaceView.display)
+                displayHelper.attach(renderer, textureView.display)
             }
             override fun onDetachedFromSurface() {
                 displayHelper.detach()
@@ -146,7 +144,7 @@ class MeditationHallRenderer(
                 FilamentHelper.synchronizePendingFrames(engine)
             }
         }
-        uiHelper.attachTo(surfaceView)
+        uiHelper.attachTo(textureView)
         camera.lookAt(0.0, 4.6, 8.4, 0.0, 0.55, -5.2, 0.0, 1.0, 0.0)
         camera.setExposure(16.0f, 1.0f / 125.0f, 100.0f)
         choreographer.postFrameCallback(frameCallback)
@@ -214,7 +212,7 @@ class MeditationHallRenderer(
         scene.skybox = Skybox.Builder().color(0.83f, 0.86f, 0.88f, 1.0f).build(engine)
         view.camera = camera
         view.scene = scene
-        view.setShadowingEnabled(true)
+        view.setPostProcessingEnabled(false)
     }
 
     private fun setupLights() {
@@ -254,7 +252,7 @@ class MeditationHallRenderer(
         place(box, textures.woodWall, 0f, 2.6f, -8.4f, 7.2f, 2.7f, 0.08f, 1f)
         place(box, textures.woodWall, -7.2f, 2.6f, -1.2f, 0.08f, 2.7f, 9.0f, 1f)
         place(box, textures.woodWall, 7.2f, 2.6f, -1.2f, 0.08f, 2.7f, 9.0f, 1f)
-        place(plane, textures.woodWall, 0f, 5.35f, -1.2f, 7.2f, 1f, 9.0f, 1f)
+        place(box, textures.woodWall, 0f, 5.35f, -1.2f, 7.2f, 0.05f, 9.0f, 1f)
         for (i in 0..8) {
             val z = -8.0f + i * 1.7f
             place(box, textures.woodFloor, 0f, 5.15f, z, 7.1f, 0.06f, 0.10f, 1f)

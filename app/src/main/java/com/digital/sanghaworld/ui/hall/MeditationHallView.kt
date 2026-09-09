@@ -1,6 +1,7 @@
 package com.digital.sanghaworld.ui.hall
 
-import android.view.SurfaceView
+import android.view.TextureView
+import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -26,13 +27,22 @@ fun MeditationHallView(
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            SurfaceView(context).also { surface ->
-                try {
-                    renderer = MeditationHallRenderer(context, surface).also { it.setState(state) }
-                } catch (_: Throwable) {
-                    onUnavailable()
-                }
+            val texture = TextureView(context)
+            val host = FrameLayout(context).apply {
+                addView(
+                    texture,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
             }
+            try {
+                renderer = MeditationHallRenderer(context, texture).also { it.setState(state) }
+            } catch (_: Throwable) {
+                onUnavailable()
+            }
+            host
         },
         update = { renderer?.setState(state) }
     )
