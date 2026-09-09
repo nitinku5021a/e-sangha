@@ -80,4 +80,7 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.security:security-crypto:1.0.0")
+    implementation("com.google.android.filament:filament-android:1.56.0")
+    implementation("com.google.android.filament:filament-utils-android:1.56.0")
+    implementation("com.google.android.filament:filamat-android:1.56.0")
 }

@@ -21,6 +21,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,7 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.R
 import com.digital.sanghaworld.hall.DisplayMode
+import com.digital.sanghaworld.hall.MeditationHallState
 import com.digital.sanghaworld.hall.ParticipantPresence
+import com.digital.sanghaworld.hall.SeatAllocator
 import com.digital.sanghaworld.ui.QuietButton
 
 @Composable
@@ -40,6 +46,7 @@ fun HallSittingScreen(
     timeLeft: Long,
     participants: List<ParticipantPresence>,
     expectedSeats: Int,
+    currentUserId: String,
     onLeave: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -49,65 +56,90 @@ fun HallSittingScreen(
     val minutes = (timeLeft / 1000) / 60
     val seconds = (timeLeft / 1000) % 60
     val timeFormatted = String.format("%d:%02d", minutes, seconds)
+    val hallState = remember(arrived, currentUserId) {
+        MeditationHallState(
+            currentUserId = currentUserId,
+            occupants = SeatAllocator.allocate(arrived.map { it.userId }, currentUserId)
+        )
+    }
+    var use3d by remember { mutableStateOf(true) }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top
-        ) {
-            Text(
-                text = hallName,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+        if (use3d) {
+            MeditationHallView(
+                state = hallState,
+                modifier = Modifier.fillMaxSize(),
+                onUnavailable = { use3d = false }
+            )
+        } else {
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 12.dp, top = 2.dp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = timeFormatted,
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontSize = 18.sp,
-                    letterSpacing = 1.sp
-                ),
-                color = MaterialTheme.colorScheme.primary
-            )
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 48.dp)
+            ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    contentPadding = PaddingValues(bottom = 12.dp)
+                ) {
+                    itemsIndexed(arrived, key = { _, p -> p.userId }) { _, person ->
+                        OccupiedCushion(name = person.label)
+                    }
+                    items(emptyCount) {
+                        EmptyCushion()
+                    }
+                }
+            }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "${arrived.size} sitting",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
-        )
-        Spacer(Modifier.height(16.dp))
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            contentPadding = PaddingValues(bottom = 12.dp)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            itemsIndexed(arrived, key = { _, p -> p.userId }) { _, person ->
-                OccupiedCushion(name = person.label)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = hallName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp, top = 2.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = timeFormatted,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = 16.sp,
+                        letterSpacing = 1.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
-            items(emptyCount) {
-                EmptyCushion()
-            }
+            Text(
+                text = "${arrived.size} meditators",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
+            )
+            Spacer(Modifier.weight(1f))
+            QuietButton(
+                text = "Leave sitting",
+                onClick = onLeave,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
         }
-        QuietButton(
-            text = "Leave sitting",
-            onClick = onLeave,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(8.dp))
     }
 }
 

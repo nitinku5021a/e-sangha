@@ -190,6 +190,7 @@ fun VipassanaApp(
                     hallUi.sittingCount,
                     hallUi.sittingParticipants.size
                 ),
+                currentUserId = hallUi.profile?.id.orEmpty(),
                 onLeave = stopSit
             )
         } else {
