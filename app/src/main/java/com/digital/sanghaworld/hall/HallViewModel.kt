@@ -33,6 +33,7 @@ data class HallUiState(
     val sittingHallName: String? = null,
     val sittingParticipants: List<ParticipantPresence> = emptyList(),
     val sittingCount: Int = 0,
+    val sittingExpected: Int = 0,
     val actionError: String? = null
 )
 
@@ -98,6 +99,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingHallName = _state.value.sittingHallName,
             sittingParticipants = _state.value.sittingParticipants,
             sittingCount = _state.value.sittingCount,
+            sittingExpected = _state.value.sittingExpected,
             actionError = _state.value.actionError
         )
     }
@@ -377,6 +379,11 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                     _state.value = _state.value.copy(
                         sittingHallName = hall?.name ?: _state.value.selectedHall?.name,
                         sittingCount = people.size.coerceAtLeast(joined.participantCount),
+                        sittingExpected = maxOf(
+                            _state.value.sittingExpected,
+                            _state.value.selectedParticipantCount,
+                            people.size
+                        ),
                         sittingParticipants = people
                     )
                 } else {
@@ -427,6 +434,11 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                         _state.value = _state.value.copy(
                             sittingHallName = hall?.name,
                             sittingCount = people.size.coerceAtLeast(1),
+                            sittingExpected = maxOf(
+                                _state.value.sittingExpected,
+                                _state.value.selectedParticipantCount,
+                                people.size
+                            ),
                             sittingParticipants = people
                         )
                         joined.remainingMillis.takeIf { it > 0 }
@@ -458,7 +470,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(
             sittingHallName = hall.name,
             sittingParticipants = presence,
-            sittingCount = presence.size
+            sittingCount = presence.size,
+            sittingExpected = maxOf(_state.value.selectedParticipantCount, presence.size)
         )
         mutate { st ->
             val already = st.attendance.any { it.sessionId == sessionId && it.userId == st.profile.id && it.leftAtMillis == null }
@@ -486,7 +499,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching { api.leaveSession(sessionId) }
                 activeSessionId = null
                 activeHallId = null
-                _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0)
+                _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0, sittingExpected = 0)
                 refresh()
             }
             return
@@ -522,7 +535,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         engine.handleSessionCompleted()
         activeSessionId = null
         activeHallId = null
-        _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0)
+        _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0, sittingExpected = 0)
         refresh()
     }
 
@@ -623,7 +636,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             selectedHall = _state.value.selectedHall?.let { sel -> next.halls.firstOrNull { it.id == sel.id } },
             sittingHallName = _state.value.sittingHallName,
             sittingParticipants = _state.value.sittingParticipants,
-            sittingCount = _state.value.sittingCount
+            sittingCount = _state.value.sittingCount,
+            sittingExpected = _state.value.sittingExpected
         )
     }
 
@@ -648,6 +662,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingHallName = _state.value.sittingHallName,
             sittingParticipants = _state.value.sittingParticipants,
             sittingCount = _state.value.sittingCount,
+            sittingExpected = _state.value.sittingExpected,
             actionError = _state.value.actionError
         )
     }

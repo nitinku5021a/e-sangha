@@ -68,6 +68,7 @@ import com.digital.sanghaworld.ui.hall.CommunitySupportScreen
 import com.digital.sanghaworld.ui.hall.CreateHallScreen
 import com.digital.sanghaworld.ui.hall.HallDetailScreen
 import com.digital.sanghaworld.ui.hall.HallLogScreen
+import com.digital.sanghaworld.ui.hall.HallSittingScreen
 import com.digital.sanghaworld.ui.hall.HallsHomeScreen
 import com.digital.sanghaworld.ui.theme.VipassanaTheme
 import kotlinx.coroutines.delay
@@ -171,21 +172,34 @@ fun VipassanaApp(
                 delay(10_000)
             }
         }
-        TimerScreen(
-            timeLeft = timeLeft,
-            totalDuration = totalDuration,
-            isInPrep = isInPrep,
-            onStop = {
-                val attended = (totalDuration - timeLeft).coerceAtLeast(0)
-                if (hallViewModel.activeSessionId != null) {
-                    hallViewModel.completeSession(attended)
-                }
-                viewModel.stopTimer(context)
-            },
-            hallName = hallUi.sittingHallName,
-            sittingCount = hallUi.sittingCount,
-            participants = hallUi.sittingParticipants
-        )
+        val stopSit = {
+            val attended = (totalDuration - timeLeft).coerceAtLeast(0)
+            if (hallViewModel.activeSessionId != null) {
+                hallViewModel.completeSession(attended)
+            }
+            viewModel.stopTimer(context)
+        }
+        if (hallUi.sittingHallName != null) {
+            HallSittingScreen(
+                hallName = hallUi.sittingHallName.orEmpty(),
+                timeLeft = timeLeft,
+                participants = hallUi.sittingParticipants,
+                expectedSeats = maxOf(
+                    hallUi.sittingExpected,
+                    hallUi.selectedParticipantCount,
+                    hallUi.sittingCount,
+                    hallUi.sittingParticipants.size
+                ),
+                onLeave = stopSit
+            )
+        } else {
+            TimerScreen(
+                timeLeft = timeLeft,
+                totalDuration = totalDuration,
+                isInPrep = isInPrep,
+                onStop = stopSit
+            )
+        }
     } else if (isAwarenessRunning) {
         AwarenessRunningScreen(
             timeLeft = awarenessTimeLeft,
