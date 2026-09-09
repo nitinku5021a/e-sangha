@@ -6,9 +6,11 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.digital.sanghaworld.BuildConfig
 import com.digital.sanghaworld.hall.HallApi
@@ -57,13 +59,21 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = _state.value.copy(loading = false, error = message)
                 return@launch
             }
-            val ok = withContext(Dispatchers.IO) { api.loginWithGoogle(idToken) }
+            val login = withContext(Dispatchers.IO) {
+                runCatching { api.loginWithGoogle(idToken) }
+            }
+            val ok = login.getOrDefault(false)
+            val loginError = login.exceptionOrNull()?.message
             _state.value = AuthUiState(
                 ready = true,
                 signedIn = ok,
                 displayName = tokens.displayName,
                 loading = false,
-                error = if (ok) null else "Could not reach the server or Google token was rejected."
+                error = when {
+                    ok -> null
+                    !loginError.isNullOrBlank() -> loginError
+                    else -> "Could not reach the server or Google token was rejected."
+                }
             )
         }
     }
@@ -90,19 +100,41 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             nonce,
             android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
         )
-        val option = GetGoogleIdOption.Builder()
+        val clientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+        val manager = CredentialManager.create(activityContext)
+        val oneTap = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
-            .setAutoSelectEnabled(true)
+            .setServerClientId(clientId)
+            .setAutoSelectEnabled(false)
             .setNonce(nonceStr)
             .build()
-        val request = GetCredentialRequest.Builder()
-            .addCredentialOption(option)
-            .build()
         val response = try {
-            CredentialManager.create(activityContext).getCredential(activityContext, request)
+            manager.getCredential(
+                activityContext,
+                GetCredentialRequest.Builder().addCredentialOption(oneTap).build()
+            )
         } catch (e: GetCredentialException) {
-            throw IllegalStateException(e.errorMessage?.toString() ?: e.message ?: "Google sign-in failed")
+            // One Tap often returns "No credentials available" on a fresh install / new
+            // package / missing Android OAuth SHA-1. Sign in with Google still shows the picker.
+            val siwg = GetSignInWithGoogleOption.Builder(clientId)
+                .setNonce(nonceStr)
+                .build()
+            try {
+                manager.getCredential(
+                    activityContext,
+                    GetCredentialRequest.Builder().addCredentialOption(siwg).build()
+                )
+            } catch (e2: GetCredentialException) {
+                val detail = e2.errorMessage?.toString() ?: e2.message
+                    ?: e.errorMessage?.toString() ?: e.message
+                    ?: "Google sign-in failed"
+                val hint = if (e is NoCredentialException || e2 is NoCredentialException) {
+                    " No Google account on this phone, or Google Cloud is missing an Android OAuth client for package com.digital.meditationsangha with this APK's SHA-1."
+                } else {
+                    ""
+                }
+                throw IllegalStateException(detail + hint)
+            }
         }
         val credential = response.credential
         if (credential is CustomCredential &&

@@ -169,11 +169,43 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         scheduleType: ScheduleType,
         days: Set<DayOfWeek>,
         visibility: HallVisibility,
+        audioType: AudioType,
+        onCreated: (String?) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    connectRemote()
+                    if (useRemote) {
+                        api.createHall(
+                            name, description, durationMinutes, hour, minute,
+                            scheduleType, days, visibility, audioType
+                        )
+                    } else {
+                        createHallLocal(
+                            name, description, durationMinutes, hour, minute,
+                            scheduleType, days, visibility, audioType
+                        )
+                    }
+                }
+            }
+            val id = result.getOrNull()
+            if (id != null) openHall(id)
+            onCreated(id)
+        }
+    }
+
+    private fun createHallLocal(
+        name: String,
+        description: String,
+        durationMinutes: Int,
+        hour: Int,
+        minute: Int,
+        scheduleType: ScheduleType,
+        days: Set<DayOfWeek>,
+        visibility: HallVisibility,
         audioType: AudioType
     ): String {
-        if (useRemote) {
-            return api.createHall(name, description, durationMinutes, hour, minute, scheduleType, days, visibility, audioType)
-        }
         val hallId = HallIds.newId()
         mutate { s ->
             val hall = Hall(
@@ -209,20 +241,34 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
      * Returns remaining duration in millis for TimerService, or null if not yet started
      * (caller should wait / start at scheduled time with full duration).
      */
-    fun enterSession(hallId: String): Long? {
+    fun enterSession(hallId: String, onRemaining: (Long?) -> Unit) {
         if (useRemote) {
-            val (sessionId, remaining) = api.ensureAndJoinSession(hallId)
-            activeSessionId = sessionId
-            activeHallId = hallId
-            sessionJoinMillis = SessionClock.nowMillis()
-            val hall = runCatching { api.getHall(hallId).hall }.getOrNull()
-            _state.value = _state.value.copy(
-                sittingHallName = hall?.name,
-                sittingCount = 1,
-                sittingParticipants = listOf(ParticipantPresence(api.currentUserId(), "You", DisplayMode.AVATAR))
-            )
-            return remaining
+            viewModelScope.launch {
+                val remaining = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val (sessionId, rem) = api.ensureAndJoinSession(hallId)
+                        activeSessionId = sessionId
+                        activeHallId = hallId
+                        sessionJoinMillis = SessionClock.nowMillis()
+                        val hall = runCatching { api.getHall(hallId).hall }.getOrNull()
+                        _state.value = _state.value.copy(
+                            sittingHallName = hall?.name,
+                            sittingCount = 1,
+                            sittingParticipants = listOf(
+                                ParticipantPresence(api.currentUserId(), "You", DisplayMode.AVATAR)
+                            )
+                        )
+                        rem
+                    }.getOrNull()
+                }
+                onRemaining(remaining)
+            }
+            return
         }
+        onRemaining(enterSessionLocal(hallId))
+    }
+
+    private fun enterSessionLocal(hallId: String): Long? {
         val s = store.load()
         val hall = s.halls.firstOrNull { it.id == hallId } ?: return null
         val schedule = s.schedules.firstOrNull { it.hallId == hallId } ?: return null
@@ -261,11 +307,13 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         val sessionId = activeSessionId ?: return
         val hallId = activeHallId ?: return
         if (useRemote) {
-            runCatching { api.leaveSession(sessionId) }
-            activeSessionId = null
-            activeHallId = null
-            _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0)
-            refresh()
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { api.leaveSession(sessionId) }
+                activeSessionId = null
+                activeHallId = null
+                _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0)
+                refresh()
+            }
             return
         }
         val now = SessionClock.nowMillis()
@@ -358,8 +406,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun createPrivateSupportHall(): String {
-        return createHall(
+    fun createPrivateSupportHall(onCreated: (String?) -> Unit = {}) {
+        createHall(
             name = "Private support sit",
             description = "A silent sitting for two. No conversation during meditation.",
             durationMinutes = 60,
@@ -368,14 +416,25 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             scheduleType = ScheduleType.ONCE,
             days = emptySet(),
             visibility = HallVisibility.PRIVATE,
-            audioType = AudioType.BELL
+            audioType = AudioType.BELL,
+            onCreated = onCreated
         )
     }
 
-    fun findByShareCode(code: String): String? {
-        if (useRemote) return runCatching { api.hallByCode(code) }.getOrNull()
-        val s = store.load()
-        return s.halls.firstOrNull { it.shareCode.equals(code.trim(), ignoreCase = true) }?.id
+    fun findByShareCode(code: String, onFound: (String?) -> Unit) {
+        viewModelScope.launch {
+            val id = withContext(Dispatchers.IO) {
+                runCatching {
+                    connectRemote()
+                    if (useRemote) api.hallByCode(code)
+                    else store.load().halls.firstOrNull {
+                        it.shareCode.equals(code.trim(), ignoreCase = true)
+                    }?.id
+                }.getOrNull()
+            }
+            if (id != null) openHall(id)
+            onFound(id)
+        }
     }
 
     private fun mutate(block: (HallState) -> HallState) {

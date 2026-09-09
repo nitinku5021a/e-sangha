@@ -382,9 +382,9 @@ fun VipassanaApp(
                         when (hallPage) {
                             "create" -> CreateHallScreen(
                                 onCreate = { name, desc, dur, hour, minute, type, days, vis, audio ->
-                                    val id = hallViewModel.createHall(name, desc, dur, hour, minute, type, days, vis, audio)
-                                    hallViewModel.openHall(id)
-                                    hallPage = "detail"
+                                    hallViewModel.createHall(name, desc, dur, hour, minute, type, days, vis, audio) { id ->
+                                        if (id != null) hallPage = "detail"
+                                    }
                                 },
                                 onCancel = { hallPage = "home" },
                                 modifier = Modifier.padding(innerPadding)
@@ -394,9 +394,12 @@ fun VipassanaApp(
                                 onJoin = { hallUi.selectedHall?.id?.let { hallViewModel.joinHall(it) } },
                                 onLeave = { hallUi.selectedHall?.id?.let { hallViewModel.leaveHall(it) } },
                                 onEnter = {
-                                    val remaining = hallUi.selectedHall?.id?.let { hallViewModel.enterSession(it) }
-                                    if (remaining != null) {
-                                        viewModel.startTimer(context, remaining)
+                                    hallUi.selectedHall?.id?.let { hallId ->
+                                        hallViewModel.enterSession(hallId) { remaining ->
+                                            if (remaining != null) {
+                                                viewModel.startTimer(context, remaining)
+                                            }
+                                        }
                                     }
                                 },
                                 onBack = { hallPage = "home"; hallViewModel.refresh() },
@@ -408,9 +411,9 @@ fun VipassanaApp(
                                 onRequest = { hallViewModel.requestSupport(60, false) },
                                 onCancel = { hallViewModel.cancelSupport(it) },
                                 onPrivateSit = {
-                                    val id = hallViewModel.createPrivateSupportHall()
-                                    hallViewModel.openHall(id)
-                                    hallPage = "detail"
+                                    hallViewModel.createPrivateSupportHall { id ->
+                                        if (id != null) hallPage = "detail"
+                                    }
                                 },
                                 onBack = { hallPage = "home" },
                                 modifier = Modifier.padding(innerPadding)
@@ -430,9 +433,8 @@ fun VipassanaApp(
                                 onSupport = { hallPage = "support" },
                                 onLogs = { hallPage = "logs" },
                                 onJoinCode = { code ->
-                                    hallViewModel.findByShareCode(code)?.let {
-                                        hallViewModel.openHall(it)
-                                        hallPage = "detail"
+                                    hallViewModel.findByShareCode(code) { id ->
+                                        if (id != null) hallPage = "detail"
                                     }
                                 },
                                 modifier = Modifier.padding(innerPadding)

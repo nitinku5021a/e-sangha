@@ -18,16 +18,14 @@ class HallApi(
     fun isConfigured(): Boolean = tokens.isSignedIn()
 
     fun loginWithGoogle(idToken: String): Boolean {
-        return runCatching {
-            val res = request(
-                "POST",
-                "/v1/auth/google",
-                JSONObject().put("idToken", idToken).put("device", "android"),
-                auth = false
-            )
-            saveTokens(res)
-            true
-        }.getOrDefault(false)
+        val res = request(
+            "POST",
+            "/v1/auth/google",
+            JSONObject().put("idToken", idToken).put("device", "android"),
+            auth = false
+        )
+        saveTokens(res)
+        return true
     }
 
     fun refreshSession(): Boolean {
@@ -269,8 +267,8 @@ class HallApi(
     private fun requestRaw(method: String, path: String, body: JSONObject?, auth: Boolean, retried: Boolean = false): String {
         val conn = (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
-            connectTimeout = 4000
-            readTimeout = 8000
+            connectTimeout = 15000
+            readTimeout = 20000
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
             if (auth) tokens.accessToken?.let { setRequestProperty("Authorization", "Bearer $it") }
