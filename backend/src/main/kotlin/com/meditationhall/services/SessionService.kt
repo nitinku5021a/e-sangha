@@ -7,7 +7,9 @@ import com.meditationhall.db.MeditationLogs
 import com.meditationhall.db.MeditationSessions
 import com.meditationhall.db.now
 import com.meditationhall.db.uuid
+import com.meditationhall.db.Users
 import com.meditationhall.dto.LogDto
+import com.meditationhall.dto.ParticipantDto
 import com.meditationhall.dto.SessionDto
 import com.meditationhall.dto.StatsDto
 import com.meditationhall.dto.WsEvent
@@ -59,10 +61,36 @@ class SessionService(private val hub: RealtimeHub) {
 
     fun get(sessionId: UUID): SessionDto = transaction { toDto(sessionId) }
 
+    fun participants(sessionId: UUID): List<ParticipantDto> = transaction {
+        MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
+            ?: throw ApiException(HttpStatusCode.NotFound, "SESSION_NOT_FOUND", "Session not found.")
+        Attendance.selectAll()
+            .filter { it[Attendance.sessionId] == sessionId && it[Attendance.leftAt] == null }
+            .map { row ->
+                val user = Users.selectAll().firstOrNull { it[Users.id] == row[Attendance.userId] }
+                ParticipantDto(
+                    userId = row[Attendance.userId].toString(),
+                    displayName = user?.get(Users.displayName) ?: "Practitioner",
+                    displayMode = "AVATAR"
+                )
+            }
+    }
+
     fun join(userId: UUID, sessionId: UUID): SessionDto {
         val dto = transaction {
             val session = MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
                 ?: throw ApiException(HttpStatusCode.NotFound, "SESSION_NOT_FOUND", "Session not found.")
+            val start = session[MeditationSessions.scheduledStart]
+            val end = start.plusSeconds(session[MeditationSessions.durationSeconds].toLong())
+            val now = Instant.now()
+            val arriveFrom = start.minusSeconds(15 * 60)
+            if (now.isBefore(arriveFrom) || now.isAfter(end)) {
+                throw ApiException(
+                    HttpStatusCode.Conflict,
+                    "NOT_IN_ARRIVAL_WINDOW",
+                    "You can enter this sitting from 15 minutes before it starts until it ends."
+                )
+            }
             val open = Attendance.selectAll().any {
                 it[Attendance.sessionId] == sessionId && it[Attendance.userId] == userId && it[Attendance.leftAt] == null
             }

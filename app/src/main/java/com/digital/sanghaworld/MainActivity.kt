@@ -70,6 +70,7 @@ import com.digital.sanghaworld.ui.hall.HallDetailScreen
 import com.digital.sanghaworld.ui.hall.HallLogScreen
 import com.digital.sanghaworld.ui.hall.HallsHomeScreen
 import com.digital.sanghaworld.ui.theme.VipassanaTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -164,6 +165,12 @@ fun VipassanaApp(
     }
 
     if (isRunning) {
+        LaunchedEffect(hallViewModel.activeSessionId, isRunning) {
+            while (isRunning && hallViewModel.activeSessionId != null) {
+                hallViewModel.refreshPresence()
+                delay(10_000)
+            }
+        }
         TimerScreen(
             timeLeft = timeLeft,
             totalDuration = totalDuration,
@@ -424,11 +431,14 @@ fun VipassanaApp(
                                 ui = hallUi,
                                 onJoin = { hallUi.selectedHall?.id?.let { hallViewModel.joinHall(it) } },
                                 onLeave = { hallUi.selectedHall?.id?.let { hallViewModel.leaveHall(it) } },
+                                onArrive = {
+                                    hallUi.selectedHall?.id?.let { hallViewModel.arriveForSitting(it) }
+                                },
                                 onEnter = {
                                     hallUi.selectedHall?.id?.let { hallId ->
                                         hallViewModel.enterSession(hallId) { remaining ->
                                             if (remaining != null) {
-                                                viewModel.startTimer(context, remaining)
+                                                viewModel.startTimer(context, remaining, skipPrep = true)
                                             }
                                         }
                                     }

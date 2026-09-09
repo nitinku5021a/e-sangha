@@ -149,12 +149,39 @@ class HallApi(
         return request("GET", "/v1/halls/by-code/${code.trim()}").getString("id")
     }
 
-    fun ensureAndJoinSession(hallId: String): Pair<String, Long> {
+    data class JoinedSession(
+        val sessionId: String,
+        val remainingMillis: Long,
+        val status: String,
+        val scheduledStartMillis: Long,
+        val participantCount: Int
+    )
+
+    fun ensureAndJoinSession(hallId: String): JoinedSession {
         val session = request("POST", "/v1/halls/$hallId/sessions/ensure")
         val sessionId = session.getString("id")
         val joined = request("POST", "/v1/sessions/$sessionId/join")
-        val remaining = joined.optLong("remainingSeconds", 0L).coerceAtLeast(1L)
-        return sessionId to remaining * 1000L
+        val remainingSec = joined.optLong("remainingSeconds", 0L)
+        return JoinedSession(
+            sessionId = sessionId,
+            remainingMillis = remainingSec * 1000L,
+            status = joined.optString("status"),
+            scheduledStartMillis = joined.optLong("scheduledStartMillis"),
+            participantCount = joined.optInt("participantCount")
+        )
+    }
+
+    fun sessionParticipants(sessionId: String): List<ParticipantPresence> {
+        val arr = requestArray("GET", "/v1/sessions/$sessionId/participants")
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            ParticipantPresence(
+                userId = o.getString("userId"),
+                label = o.optString("displayName").ifBlank { "Practitioner" },
+                displayMode = runCatching { DisplayMode.valueOf(o.optString("displayMode", "AVATAR")) }
+                    .getOrDefault(DisplayMode.AVATAR)
+            )
+        }
     }
 
     fun leaveSession(sessionId: String) {

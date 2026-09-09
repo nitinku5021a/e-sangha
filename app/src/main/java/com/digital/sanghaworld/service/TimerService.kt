@@ -75,6 +75,7 @@ class TimerService : Service() {
         const val ACTION_START = "com.digital.sanghaworld.START"
         const val ACTION_STOP = "com.digital.sanghaworld.STOP"
         const val EXTRA_DURATION = "com.digital.sanghaworld.DURATION"
+        const val EXTRA_SKIP_PREP = "com.digital.sanghaworld.SKIP_PREP"
         const val ACTION_START_AWARENESS = "com.digital.sanghaworld.START_AWARENESS"
         const val ACTION_STOP_AWARENESS = "com.digital.sanghaworld.STOP_AWARENESS"
         const val EXTRA_AWARENESS_DURATION = "com.digital.sanghaworld.AWARENESS_DURATION"
@@ -104,8 +105,9 @@ class TimerService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 val duration = intent.getLongExtra(EXTRA_DURATION, 0L)
+                val skipPrep = intent.getBooleanExtra(EXTRA_SKIP_PREP, false)
                 if (duration > 0) {
-                    startTimerInternal(duration)
+                    startTimerInternal(duration, skipPrep)
                 }
             }
             ACTION_STOP -> stopTimer()
@@ -121,25 +123,28 @@ class TimerService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startTimerInternal(durationMillis: Long) {
+    private fun startTimerInternal(durationMillis: Long, skipPrep: Boolean = false) {
         if (_isTimerRunning.value) return
         hasPlayedPreEndDong = false
         hasLoggedSession = false
         _hasCompleted.value = false
         _completionTitle.value = "Session Complete"
         _completionDuration.value = 0L
-        _isInPrep.value = true
+        _isInPrep.value = !skipPrep
 
         acquireWakeLock(
             "Vipassana::TimerWakeLock",
-            durationMillis + PREP_TIME_MILLIS + END_GONG_WAKELOCK_MILLIS
+            durationMillis + (if (skipPrep) 0L else PREP_TIME_MILLIS) + END_GONG_WAKELOCK_MILLIS
         )
 
-        // Start Foreground IMMEDIATELY
-        startForeground(NOTIFICATION_ID, createNotification("Consulting the silence..."))
+        startForeground(NOTIFICATION_ID, createNotification(if (skipPrep) "Sitting" else "Consulting the silence..."))
 
         _isTimerRunning.value = true
         _totalDurationInMillis.value = durationMillis
+        if (skipPrep) {
+            beginMainTimer(durationMillis)
+            return
+        }
         prepTimer = object : CountDownTimer(PREP_TIME_MILLIS, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 _timeLeftInMillis.value = millisUntilFinished
@@ -147,37 +152,40 @@ class TimerService : Service() {
             }
 
             override fun onFinish() {
-                _isInPrep.value = false
-                // Play Start Gong at actual start
-                playSelectedGong()
-                timer = object : CountDownTimer(durationMillis, 1000) {
-                    override fun onTick(millisUntilFinished: Long) {
-                        _timeLeftInMillis.value = millisUntilFinished
-                        updateNotification("Time remaining: ${formatTime(millisUntilFinished)}")
-                        if (!hasPlayedPreEndDong &&
-                            durationMillis > MIN_DURATION_FOR_PRE_DONG_MILLIS &&
-                            millisUntilFinished <= PRE_END_DONG_OFFSET_MILLIS
-                        ) {
-                            playSelectedGong()
-                            hasPlayedPreEndDong = true
-                        }
-                    }
+                beginMainTimer(durationMillis)
+            }
+        }.start()
+    }
 
-                    override fun onFinish() {
-                        _timeLeftInMillis.value = 0
-                        logSession(durationMillis)
-                        hasLoggedSession = true
-                        _completionTitle.value = "Session Complete"
-                        _completionDuration.value = durationMillis
-                        _isTimerRunning.value = false
-                        _isInPrep.value = false
-                        _hasCompleted.value = true
-                        playEndGongs {
-                            stopForeground(STOP_FOREGROUND_REMOVE)
-                            releaseWakeLock()
-                        }
-                    }
-                }.start()
+    private fun beginMainTimer(durationMillis: Long) {
+        _isInPrep.value = false
+        playSelectedGong()
+        timer = object : CountDownTimer(durationMillis, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                _timeLeftInMillis.value = millisUntilFinished
+                updateNotification("Time remaining: ${formatTime(millisUntilFinished)}")
+                if (!hasPlayedPreEndDong &&
+                    durationMillis > MIN_DURATION_FOR_PRE_DONG_MILLIS &&
+                    millisUntilFinished <= PRE_END_DONG_OFFSET_MILLIS
+                ) {
+                    playSelectedGong()
+                    hasPlayedPreEndDong = true
+                }
+            }
+
+            override fun onFinish() {
+                _timeLeftInMillis.value = 0
+                logSession(durationMillis)
+                hasLoggedSession = true
+                _completionTitle.value = "Session Complete"
+                _completionDuration.value = durationMillis
+                _isTimerRunning.value = false
+                _isInPrep.value = false
+                _hasCompleted.value = true
+                playEndGongs {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    releaseWakeLock()
+                }
             }
         }.start()
     }

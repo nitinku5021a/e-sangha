@@ -348,6 +348,60 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Join the upcoming sitting as arrived (from 15 minutes before start).
+     * Does not start the meditation timer.
+     */
+    fun arriveForSitting(hallId: String) {
+        if (activeHallId == hallId && activeSessionId != null) {
+            refreshPresence()
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                connectRemote()
+                if (useRemote) {
+                    val joined = api.ensureAndJoinSession(hallId)
+                    activeSessionId = joined.sessionId
+                    activeHallId = hallId
+                    sessionJoinMillis = SessionClock.nowMillis()
+                    val hall = runCatching { api.getHall(hallId).hall }.getOrNull()
+                    val people = runCatching { api.sessionParticipants(joined.sessionId) }.getOrDefault(
+                        listOf(
+                            ParticipantPresence(
+                                api.currentUserId(),
+                                tokens.displayName ?: "You",
+                                DisplayMode.AVATAR
+                            )
+                        )
+                    )
+                    _state.value = _state.value.copy(
+                        sittingHallName = hall?.name ?: _state.value.selectedHall?.name,
+                        sittingCount = people.size.coerceAtLeast(joined.participantCount),
+                        sittingParticipants = people
+                    )
+                } else {
+                    enterSessionLocal(hallId)
+                }
+            }
+        }
+    }
+
+    fun refreshPresence() {
+        val sessionId = activeSessionId ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                if (useRemote) {
+                    val people = api.sessionParticipants(sessionId)
+                    _state.value = _state.value.copy(
+                        sittingParticipants = people,
+                        sittingCount = people.size
+                    )
+                }
+            }
+        }
+    }
+
+    /**
      * Returns remaining duration in millis for TimerService, or null if not yet started
      * (caller should wait / start at scheduled time with full duration).
      */
@@ -356,26 +410,34 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 val remaining = withContext(Dispatchers.IO) {
                     runCatching {
-                        val (sessionId, rem) = api.ensureAndJoinSession(hallId)
-                        activeSessionId = sessionId
+                        val joined = api.ensureAndJoinSession(hallId)
+                        activeSessionId = joined.sessionId
                         activeHallId = hallId
                         sessionJoinMillis = SessionClock.nowMillis()
                         val hall = runCatching { api.getHall(hallId).hall }.getOrNull()
-                        _state.value = _state.value.copy(
-                            sittingHallName = hall?.name,
-                            sittingCount = 1,
-                            sittingParticipants = listOf(
-                                ParticipantPresence(api.currentUserId(), "You", DisplayMode.AVATAR)
+                        val people = runCatching { api.sessionParticipants(joined.sessionId) }.getOrDefault(
+                            listOf(
+                                ParticipantPresence(
+                                    api.currentUserId(),
+                                    tokens.displayName ?: "You",
+                                    DisplayMode.AVATAR
+                                )
                             )
                         )
-                        rem
+                        _state.value = _state.value.copy(
+                            sittingHallName = hall?.name,
+                            sittingCount = people.size.coerceAtLeast(1),
+                            sittingParticipants = people
+                        )
+                        joined.remainingMillis.takeIf { it > 0 }
                     }.getOrNull()
                 }
                 onRemaining(remaining)
             }
             return
         }
-        onRemaining(enterSessionLocal(hallId))
+        val remaining = enterSessionLocal(hallId)
+        onRemaining(remaining.takeIf { it != null && it > 0 })
     }
 
     private fun enterSessionLocal(hallId: String): Long? {
@@ -384,17 +446,19 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         val schedule = s.schedules.firstOrNull { it.hallId == hallId } ?: return null
         val now = SessionClock.nowMillis()
         val start = store.nextOccurrence(schedule, hall.durationSeconds, now) ?: return null
+        val inSession = now >= start
         val remaining = SessionClock.remainingSeconds(start, hall.durationSeconds, now)
         val sessionId = "$hallId-$start"
         engine.handleSessionStarted(start, hall.durationSeconds)
         activeSessionId = sessionId
         activeHallId = hallId
         sessionJoinMillis = now
-        val presence = syntheticPresence(s, hall, remaining > 0)
+        val you = ParticipantPresence(s.profile.id, s.profile.displayName, DisplayMode.AVATAR)
+        val presence = listOf(you)
         _state.value = _state.value.copy(
             sittingHallName = hall.name,
             sittingParticipants = presence,
-            sittingCount = presence.size + if (remaining > 0) 12 else 4
+            sittingCount = presence.size
         )
         mutate { st ->
             val already = st.attendance.any { it.sessionId == sessionId && it.userId == st.profile.id && it.leftAtMillis == null }
@@ -409,6 +473,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         }
+        if (!inSession) return null
         val remainingMillis = remaining * 1000L
         return remainingMillis.coerceAtLeast(1_000L)
     }

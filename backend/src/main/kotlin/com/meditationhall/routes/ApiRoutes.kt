@@ -122,6 +122,10 @@ fun Route.apiRoutes(
             auth.requireUser(call.request.header("Authorization"))
             call.respond(sessions.get(UUID.fromString(call.parameters["id"])))
         }
+        get("/sessions/{id}/participants") {
+            auth.requireUser(call.request.header("Authorization"))
+            call.respond(sessions.participants(UUID.fromString(call.parameters["id"])))
+        }
         post("/sessions/{id}/join") {
             val user = auth.requireUser(call.request.header("Authorization"))
             call.respond(sessions.join(user, UUID.fromString(call.parameters["id"])))

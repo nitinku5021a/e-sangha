@@ -106,6 +106,13 @@ data class SessionDto(
 )
 
 @Serializable
+data class ParticipantDto(
+    val userId: String,
+    val displayName: String,
+    val displayMode: String = "AVATAR"
+)
+
+@Serializable
 data class LogDto(
     val id: String,
     val hallId: String,

@@ -12,15 +12,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import android.content.Intent
 import com.digital.sanghaworld.hall.HallUiState
 import com.digital.sanghaworld.ui.QuietButton
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
 
 @Composable
 fun HallDetailScreen(
@@ -31,17 +39,39 @@ fun HallDetailScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit = {},
     onDelete: () -> Unit = {},
+    onArrive: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val hall = ui.selectedHall ?: return
     val isCreator = ui.profile?.id != null && hall.creatorId == ui.profile.id
     val context = LocalContext.current
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(hall.id) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val startMillis = ui.selectedNextStart
+    val durationMillis = hall.durationSeconds * 1000L
+    val untilStart = if (startMillis > 0) startMillis - nowMillis else Long.MAX_VALUE
+    val inSession = startMillis > 0 && nowMillis >= startMillis && nowMillis < startMillis + durationMillis
+    val arrivalWindow = untilStart in 1..(15 * 60 * 1000L)
+    LaunchedEffect(hall.id, arrivalWindow, ui.selectedJoined) {
+        if (arrivalWindow && ui.selectedJoined) onArrive()
+    }
+    LaunchedEffect(hall.id, inSession, ui.selectedJoined) {
+        if (inSession && ui.selectedJoined) {
+            onEnter()
+            delay(1200)
+            onEnter()
+        }
+    }
     val startLabel = if (ui.selectedNextStart > 0) {
         val localStart = Instant.ofEpochMilli(ui.selectedNextStart).atZone(ZoneId.systemDefault())
         localStart.format(DateTimeFormatter.ofPattern("EEE d MMM")) + ", " +
             localStart.format(DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
     } else "—"
-    val remaining = ui.selectedRemaining
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -55,6 +85,32 @@ fun HallDetailScreen(
         Spacer(Modifier.height(16.dp))
         Meta("Duration", "${hall.durationSeconds / 60} minutes")
         Meta("Next sitting", startLabel)
+        if (untilStart > 0 && untilStart < 24 * 60 * 60 * 1000L) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Starts in",
+                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 3.sp),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = formatCountdown(untilStart),
+                style = MaterialTheme.typography.displayLarge.copy(fontSize = 52.sp, letterSpacing = 2.sp),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            if (arrivalWindow && ui.selectedJoined) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "You've arrived. The sitting begins at the scheduled time.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         Meta("Visibility", hall.visibility.name.lowercase().replaceFirstChar { it.titlecase() })
         Meta("Audio", hall.audioType.name.lowercase().replaceFirstChar { it.titlecase() })
         Meta("Share code", hall.shareCode)
@@ -74,7 +130,7 @@ fun HallDetailScreen(
             )
         }
         Spacer(Modifier.height(20.dp))
-        if (remaining != null) {
+        if (inSession) {
             QuietButton(
                 text = "Enter sitting",
                 emphasized = true,
@@ -113,6 +169,15 @@ fun HallDetailScreen(
 }
 
 @Composable
+private fun formatCountdown(millis: Long): String {
+    val totalSec = (millis / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) String.format("%d:%02d:%02d", h, m, s)
+    else String.format("%02d:%02d", m, s)
+}
+
 private fun Meta(label: String, value: String) {
     Text(
         "$label  ·  $value",
