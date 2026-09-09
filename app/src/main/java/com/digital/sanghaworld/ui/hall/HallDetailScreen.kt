@@ -168,7 +168,6 @@ fun HallDetailScreen(
     }
 }
 
-@Composable
 private fun formatCountdown(millis: Long): String {
     val totalSec = (millis / 1000).coerceAtLeast(0)
     val h = totalSec / 3600
@@ -178,6 +177,7 @@ private fun formatCountdown(millis: Long): String {
     else String.format("%02d:%02d", m, s)
 }
 
+@Composable
 private fun Meta(label: String, value: String) {
     Text(
         "$label  ·  $value",
