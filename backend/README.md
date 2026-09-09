@@ -13,7 +13,7 @@ API: `http://localhost:8080/v1`
 
 ## Auth
 
-Android package for Google OAuth: `com.digital.sanghaworld`
+Android package for Google OAuth: `com.digital.meditationsangha`
 
 Set on the server (OCI):
 
@@ -40,7 +40,7 @@ Use `Authorization: Bearer <accessToken>`. Refresh with `POST /v1/auth/refresh`.
 Google Cloud console:
 
 1. Create OAuth consent screen.
-2. Android client: package `com.digital.sanghaworld` + SHA-1 of the signing key.
+2. Android client: package `com.digital.meditationsangha` + SHA-1 of the signing key. Do not reuse the Vipassana Timer (`com.digital.sanghaworld`) OAuth client.
 3. Web client: copy the client ID into `GOOGLE_WEB_CLIENT_ID` (this is the ID token audience).
 
 ## Docker

@@ -2,7 +2,7 @@
 
 Paste the matching `.txt` files into Play Console. Limits are noted below.
 
-Package name: `com.digital.sanghaworld`
+Package name: `com.digital.meditationsangha` (new listing; not Vipassana Timer’s `com.digital.sanghaworld`)
 
 ---
 
@@ -12,10 +12,10 @@ Package name: `com.digital.sanghaworld`
 File: `title.txt`
 
 ```
-Vipassana Timer
+Meditation Sangha
 ```
 
-(16 characters)
+(17 characters)
 
 ---
 
@@ -46,7 +46,7 @@ Use the full file as written.
 
 File: `whats-new.txt`
 
-Use after you upload a new AAB. Bump `versionCode` in `app/build.gradle.kts` if this is a new store version (currently versionName 1.5, versionCode 6).
+Use after you upload a new AAB. Bump `versionCode` in `app/build.gradle.kts` if this is a new store version (currently versionName 1.0, versionCode 1 — first Meditation Sangha listing).
 
 ---
 

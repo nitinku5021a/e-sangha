@@ -4,9 +4,9 @@
 
 This repo is the Meditation Sangha Android app plus a Meditation Hall API for shared sittings. Timer, gongs, and a private log exist so a sit can still happen without a hall; the product is **collective presence**, not a standalone timer listing.
 
-Gradle root project name is **SanghaWorld**. Current Android version: **1.8** (`versionCode` 9).
+Gradle root project name is **SanghaWorld**. Play / install identity: **`com.digital.meditationsangha`**. Current Android version: **1.0** (`versionCode` 1).
 
-> **Package note:** The Android `applicationId` is still `com.digital.sanghaworld` from earlier scaffolding. Play listing and launcher name for *this* product should be **Meditation Sangha**. A new package is required before a distinct Play Store listing from Vipassana Timer.
+Kotlin source still lives under the `com.digital.sanghaworld` namespace (R / BuildConfig). Only `applicationId` is the Play Store package; it is not Vipassana Timer’s `com.digital.sanghaworld`.
 
 ## What’s in this repo
 
@@ -104,11 +104,11 @@ API base: `http://localhost:8080/v1`
 
 See [backend/README.md](backend/README.md) for Google OAuth, JWT, Docker, and production notes.
 
-OAuth Android package currently matches `applicationId`: `com.digital.sanghaworld`.
+OAuth Android package must match `applicationId`: `com.digital.meditationsangha`. Create a **new** Google Cloud Android OAuth client for that package + signing SHA-1. Do not reuse the Vipassana Timer client.
 
 ## Play Store
 
-This product must ship as its **own** listing (**Meditation Sangha**), not as an update to Vipassana Timer. That requires a new `applicationId` and listing assets.
+This product ships as its **own** listing (**Meditation Sangha**, package `com.digital.meditationsangha`), not as an update to Vipassana Timer.
 
 Draft copy still lives in `Play-Store/` and may still mention the older timer name until those files are rewritten.
 
