@@ -46,17 +46,27 @@ fun CreateHallScreen(
         audioType: AudioType
     ) -> Unit,
     onCancel: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    title: String = "Create a hall",
+    submitLabel: String = "Create",
+    initialName: String = "",
+    initialDescription: String = "",
+    initialDurationMinutes: Int = 60,
+    initialHour: Int = 6,
+    initialMinute: Int = 0,
+    initialScheduleType: ScheduleType = ScheduleType.DAILY,
+    initialVisibility: HallVisibility = HallVisibility.PUBLIC,
+    initialAudioType: AudioType = AudioType.BELL
 ) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var duration by remember { mutableStateOf("60") }
-    var hour by remember { mutableStateOf("6") }
-    var minute by remember { mutableStateOf("0") }
-    var scheduleType by remember { mutableStateOf(ScheduleType.DAILY) }
-    var visibility by remember { mutableStateOf(HallVisibility.PUBLIC) }
-    var audioType by remember { mutableStateOf(AudioType.BELL) }
-    var sunday by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf(initialName) }
+    var description by remember { mutableStateOf(initialDescription) }
+    var duration by remember { mutableStateOf(initialDurationMinutes.toString()) }
+    var hour by remember { mutableStateOf(initialHour.toString()) }
+    var minute by remember { mutableStateOf(initialMinute.toString()) }
+    var scheduleType by remember { mutableStateOf(initialScheduleType) }
+    var visibility by remember { mutableStateOf(initialVisibility) }
+    var audioType by remember { mutableStateOf(initialAudioType) }
+    var sunday by remember { mutableStateOf(initialScheduleType == ScheduleType.WEEKLY) }
 
     Column(
         modifier = modifier
@@ -65,7 +75,7 @@ fun CreateHallScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 8.dp)
     ) {
-        Text("Create a hall", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+        Text(title, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(Modifier.height(8.dp))
@@ -117,7 +127,7 @@ fun CreateHallScreen(
         }
         Spacer(Modifier.height(20.dp))
         QuietButton(
-            text = "Create",
+            text = submitLabel,
             emphasized = true,
             onClick = {
                 onCreate(

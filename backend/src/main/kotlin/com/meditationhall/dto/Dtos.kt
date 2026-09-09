@@ -52,6 +52,20 @@ data class CreateHallRequest(
 )
 
 @Serializable
+data class UpdateHallRequest(
+    val name: String? = null,
+    val description: String? = null,
+    val durationMinutes: Int? = null,
+    val hour: Int? = null,
+    val minute: Int? = null,
+    val scheduleType: String? = null,
+    val daysOfWeek: List<String>? = null,
+    val visibility: String? = null,
+    val audioType: String? = null,
+    val timezone: String? = null
+)
+
+@Serializable
 data class HallDto(
     val id: String,
     val creatorId: String,
@@ -68,7 +82,8 @@ data class HallDto(
     val participantCount: Int = 0,
     val joined: Boolean = false,
     val startLocalTime: String? = null,
-    val scheduleType: String? = null
+    val scheduleType: String? = null,
+    val memberCount: Int = 0
 )
 
 @Serializable

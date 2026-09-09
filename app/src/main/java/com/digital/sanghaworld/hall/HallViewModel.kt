@@ -32,7 +32,8 @@ data class HallUiState(
     val profile: UserProfile? = null,
     val sittingHallName: String? = null,
     val sittingParticipants: List<ParticipantPresence> = emptyList(),
-    val sittingCount: Int = 0
+    val sittingCount: Int = 0,
+    val actionError: String? = null
 )
 
 class HallViewModel(application: Application) : AndroidViewModel(application) {
@@ -96,7 +97,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             ),
             sittingHallName = _state.value.sittingHallName,
             sittingParticipants = _state.value.sittingParticipants,
-            sittingCount = _state.value.sittingCount
+            sittingCount = _state.value.sittingCount,
+            actionError = _state.value.actionError
         )
     }
 
@@ -235,6 +237,112 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         return hallId
+    }
+
+    fun updateHall(
+        hallId: String,
+        name: String,
+        description: String,
+        durationMinutes: Int,
+        hour: Int,
+        minute: Int,
+        scheduleType: ScheduleType,
+        days: Set<DayOfWeek>,
+        visibility: HallVisibility,
+        audioType: AudioType,
+        onDone: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    connectRemote()
+                    if (useRemote) {
+                        api.updateHall(
+                            hallId, name, description, durationMinutes, hour, minute,
+                            scheduleType, days, visibility, audioType
+                        )
+                    } else {
+                        mutate { s ->
+                            if (s.halls.none { it.id == hallId && it.creatorId == s.profile.id }) s
+                            else s.copy(
+                                halls = s.halls.map { hall ->
+                                    if (hall.id != hallId) hall
+                                    else hall.copy(
+                                        name = name.trim().ifBlank { "Untitled hall" },
+                                        description = description.trim(),
+                                        durationSeconds = durationMinutes.coerceIn(1, 240) * 60,
+                                        visibility = visibility,
+                                        audioType = audioType
+                                    )
+                                },
+                                schedules = s.schedules.map { sch ->
+                                    if (sch.hallId != hallId) sch
+                                    else sch.copy(
+                                        scheduleType = scheduleType,
+                                        startLocalTime = LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)),
+                                        daysOfWeek = days
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }.isSuccess
+            }
+            if (ok) {
+                _state.value = _state.value.copy(actionError = null)
+                openHall(hallId)
+            } else {
+                _state.value = _state.value.copy(actionError = "Could not update this hall.")
+            }
+            onDone(ok)
+        }
+    }
+
+    fun deleteHall(hallId: String, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    connectRemote()
+                    if (useRemote) {
+                        api.deleteHall(hallId)
+                    } else {
+                        val s = store.load()
+                        val hall = s.halls.firstOrNull { it.id == hallId }
+                            ?: error("Hall not found.")
+                        if (hall.creatorId != s.profile.id) error("Only the hall creator can delete this hall.")
+                        val others = s.memberships.any { it.hallId == hallId && it.userId != s.profile.id }
+                        if (others) error("HALL_HAS_MEMBERS")
+                        mutate { st ->
+                            st.copy(
+                                halls = st.halls.map {
+                                    if (it.id == hallId) it.copy(status = HallStatus.ARCHIVED) else it
+                                },
+                                memberships = st.memberships.filterNot { it.hallId == hallId }
+                            )
+                        }
+                    }
+                }
+            }
+            if (result.isSuccess) {
+                _state.value = _state.value.copy(
+                    selectedHall = null,
+                    actionError = null
+                )
+                refresh()
+                onDone(true)
+            } else {
+                val raw = result.exceptionOrNull()?.message.orEmpty()
+                val message = when {
+                    raw.contains("HALL_HAS_MEMBERS") ->
+                        "Other people are still in this hall. They must leave before you can delete it."
+                    raw.contains("NOT_CREATOR") ->
+                        "Only the hall creator can delete this hall."
+                    else -> "Could not delete this hall."
+                }
+                _state.value = _state.value.copy(actionError = message)
+                onDone(false)
+            }
+        }
     }
 
     /**
@@ -472,7 +580,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             profile = s.profile,
             sittingHallName = _state.value.sittingHallName,
             sittingParticipants = _state.value.sittingParticipants,
-            sittingCount = _state.value.sittingCount
+            sittingCount = _state.value.sittingCount,
+            actionError = _state.value.actionError
         )
     }
 

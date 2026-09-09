@@ -29,9 +29,12 @@ fun HallDetailScreen(
     onLeave: () -> Unit,
     onEnter: () -> Unit,
     onBack: () -> Unit,
+    onEdit: () -> Unit = {},
+    onDelete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val hall = ui.selectedHall ?: return
+    val isCreator = ui.profile?.id != null && hall.creatorId == ui.profile.id
     val context = LocalContext.current
     val startLabel = if (ui.selectedNextStart > 0) {
         Instant.ofEpochMilli(ui.selectedNextStart)
@@ -62,6 +65,14 @@ fun HallDetailScreen(
         Meta("Sessions recorded", "${ui.stats.sessionCount}")
         Meta("Total sittings", "${ui.stats.totalAttendance}")
         Meta("Meditation minutes", "${ui.stats.totalMeditationSeconds / 60}")
+        if (!ui.actionError.isNullOrBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                ui.actionError,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
         Spacer(Modifier.height(20.dp))
         if (remaining != null) {
             QuietButton(
@@ -89,6 +100,12 @@ fun HallDetailScreen(
             },
             modifier = Modifier.fillMaxWidth()
         )
+        if (isCreator) {
+            Spacer(Modifier.height(10.dp))
+            QuietButton(text = "Edit hall", onClick = onEdit, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(10.dp))
+            QuietButton(text = "Delete hall", onClick = onDelete, modifier = Modifier.fillMaxWidth())
+        }
         Spacer(Modifier.height(10.dp))
         QuietButton(text = "Back", onClick = onBack, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(24.dp))

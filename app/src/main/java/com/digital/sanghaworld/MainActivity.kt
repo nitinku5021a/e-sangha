@@ -61,6 +61,7 @@ import com.digital.sanghaworld.billing.DonationViewModel
 import com.digital.sanghaworld.ui.SupportScreen
 import com.digital.sanghaworld.auth.AuthViewModel
 import com.digital.sanghaworld.hall.HallViewModel
+import com.digital.sanghaworld.hall.ScheduleType
 import com.digital.sanghaworld.ui.LoginScreen
 import com.digital.sanghaworld.ui.TimerScreen
 import com.digital.sanghaworld.ui.hall.CommunitySupportScreen
@@ -389,6 +390,35 @@ fun VipassanaApp(
                                 onCancel = { hallPage = "home" },
                                 modifier = Modifier.padding(innerPadding)
                             )
+                            "edit" -> {
+                                val hall = hallUi.selectedHall
+                                val schedule = hallUi.selectedSchedule
+                                if (hall == null) {
+                                    hallPage = "home"
+                                } else {
+                                    CreateHallScreen(
+                                        title = "Edit hall",
+                                        submitLabel = "Save",
+                                        initialName = hall.name,
+                                        initialDescription = hall.description,
+                                        initialDurationMinutes = (hall.durationSeconds / 60).coerceAtLeast(1),
+                                        initialHour = schedule?.startLocalTime?.hour ?: 6,
+                                        initialMinute = schedule?.startLocalTime?.minute ?: 0,
+                                        initialScheduleType = schedule?.scheduleType ?: ScheduleType.DAILY,
+                                        initialVisibility = hall.visibility,
+                                        initialAudioType = hall.audioType,
+                                        onCreate = { name, desc, dur, hour, minute, type, days, vis, audio ->
+                                            hallViewModel.updateHall(
+                                                hall.id, name, desc, dur, hour, minute, type, days, vis, audio
+                                            ) { ok ->
+                                                if (ok) hallPage = "detail"
+                                            }
+                                        },
+                                        onCancel = { hallPage = "detail" },
+                                        modifier = Modifier.padding(innerPadding)
+                                    )
+                                }
+                            }
                             "detail" -> HallDetailScreen(
                                 ui = hallUi,
                                 onJoin = { hallUi.selectedHall?.id?.let { hallViewModel.joinHall(it) } },
@@ -399,6 +429,14 @@ fun VipassanaApp(
                                             if (remaining != null) {
                                                 viewModel.startTimer(context, remaining)
                                             }
+                                        }
+                                    }
+                                },
+                                onEdit = { hallPage = "edit" },
+                                onDelete = {
+                                    hallUi.selectedHall?.id?.let { id ->
+                                        hallViewModel.deleteHall(id) { ok ->
+                                            if (ok) hallPage = "home"
                                         }
                                     }
                                 },

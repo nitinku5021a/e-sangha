@@ -3,6 +3,7 @@ package com.meditationhall.routes
 import com.meditationhall.auth.AuthService
 import com.meditationhall.dto.AuthRequest
 import com.meditationhall.dto.CreateHallRequest
+import com.meditationhall.dto.UpdateHallRequest
 import com.meditationhall.dto.GoogleAuthRequest
 import com.meditationhall.dto.LogoutRequest
 import com.meditationhall.dto.RefreshRequest
@@ -82,6 +83,22 @@ fun Route.apiRoutes(
             val user = auth.requireUser(call.request.header("Authorization"))
             val id = UUID.fromString(call.parameters["id"])
             call.respond(halls.get(user, id))
+        }
+        patch("/halls/{id}") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            val id = UUID.fromString(call.parameters["id"])
+            call.respond(halls.update(user, id, call.receive<UpdateHallRequest>()))
+        }
+        post("/halls/{id}") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            val id = UUID.fromString(call.parameters["id"])
+            call.respond(halls.update(user, id, call.receive<UpdateHallRequest>()))
+        }
+        delete("/halls/{id}") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            val id = UUID.fromString(call.parameters["id"])
+            halls.delete(user, id)
+            call.respond(HttpStatusCode.NoContent)
         }
         post("/halls/{id}/join") {
             val user = auth.requireUser(call.request.header("Authorization"))

@@ -105,6 +105,35 @@ class HallApi(
         return request("POST", "/v1/halls", body).getString("id")
     }
 
+    fun updateHall(
+        id: String,
+        name: String,
+        description: String,
+        durationMinutes: Int,
+        hour: Int,
+        minute: Int,
+        scheduleType: ScheduleType,
+        days: Set<DayOfWeek>,
+        visibility: HallVisibility,
+        audioType: AudioType
+    ) {
+        val body = JSONObject()
+            .put("name", name)
+            .put("description", description)
+            .put("durationMinutes", durationMinutes)
+            .put("hour", hour)
+            .put("minute", minute)
+            .put("scheduleType", scheduleType.name)
+            .put("daysOfWeek", JSONArray(days.map { it.name }))
+            .put("visibility", visibility.name)
+            .put("audioType", audioType.name)
+        request("POST", "/v1/halls/$id", body)
+    }
+
+    fun deleteHall(id: String) {
+        request("DELETE", "/v1/halls/$id")
+    }
+
     fun joinHall(id: String) {
         request("POST", "/v1/halls/$id/join")
     }
