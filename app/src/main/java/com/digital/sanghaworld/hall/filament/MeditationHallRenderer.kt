@@ -194,7 +194,12 @@ class MeditationHallRenderer(
             .material(body)
         if (textured) {
             b.require(MaterialBuilder.VertexAttribute.UV0)
-            b.samplerParameter(MaterialBuilder.SamplerType.SAMPLER_2D, "albedo")
+            b.samplerParameter(
+                MaterialBuilder.SamplerType.SAMPLER_2D,
+                MaterialBuilder.SamplerFormat.FLOAT,
+                MaterialBuilder.ParameterPrecision.DEFAULT,
+                "albedo"
+            )
             b.uniformParameter(MaterialBuilder.UniformType.FLOAT, "opacity")
         } else {
             b.uniformParameter(MaterialBuilder.UniformType.FLOAT3, "emissive")
