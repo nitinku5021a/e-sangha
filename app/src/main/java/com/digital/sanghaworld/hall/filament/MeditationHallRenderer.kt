@@ -214,7 +214,7 @@ class MeditationHallRenderer(
         scene.skybox = Skybox.Builder().color(0.83f, 0.86f, 0.88f, 1.0f).build(engine)
         view.camera = camera
         view.scene = scene
-        view.shadowingEnabled = true
+        view.setShadowingEnabled(true)
     }
 
     private fun setupLights() {
