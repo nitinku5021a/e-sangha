@@ -11,11 +11,30 @@ data class MeditationHallState(
     val occupants: List<HallOccupant>
 )
 
+data class SeatSlot(
+    val id: String,
+    val nx: Float,
+    val ny: Float,
+    val scale: Float
+)
+
 object SeatLayout {
-    const val COLUMNS = 5
+    const val COLUMNS = 3
     const val ROWS = 6
-    val seatIds: List<String> = (1..COLUMNS * ROWS).map { "seat_%02d".format(it) }
-    val currentUserSeatId: String = seatIds[(ROWS - 1) * COLUMNS + COLUMNS / 2]
+    val slots: List<SeatSlot> = buildList {
+        for (row in 0 until ROWS) {
+            val t = row / (ROWS - 1f)
+            val ny = 0.905f - t * 0.43f
+            val scale = 0.40f - t * 0.26f
+            val spread = 0.37f * (1f - t * 0.52f)
+            for (col in 0 until COLUMNS) {
+                val nx = 0.50f + (col - 1) * spread
+                add(SeatSlot("seat_%02d".format(row * COLUMNS + col + 1), nx, ny, scale))
+            }
+        }
+    }
+    val seatIds: List<String> = slots.map { it.id }
+    val currentUserSeatId: String = "seat_02"
 }
 
 object SeatAllocator {

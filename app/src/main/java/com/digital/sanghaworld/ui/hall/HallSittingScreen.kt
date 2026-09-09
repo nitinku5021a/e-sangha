@@ -1,44 +1,57 @@
 package com.digital.sanghaworld.ui.hall
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.times
 import com.digital.sanghaworld.R
 import com.digital.sanghaworld.hall.DisplayMode
-import com.digital.sanghaworld.hall.MeditationHallState
+import com.digital.sanghaworld.hall.HallOccupant
 import com.digital.sanghaworld.hall.ParticipantPresence
 import com.digital.sanghaworld.hall.SeatAllocator
+import com.digital.sanghaworld.hall.SeatLayout
 import com.digital.sanghaworld.ui.QuietButton
+import kotlin.math.abs
+
+private val HallCream = Color(0xFFD8CDB8)
+
+private val SitterDrawables = intArrayOf(
+    R.drawable.sitter_a,
+    R.drawable.sitter_b,
+    R.drawable.sitter_c,
+    R.drawable.sitter_d
+)
 
 @Composable
 fun HallSittingScreen(
@@ -51,54 +64,22 @@ fun HallSittingScreen(
     modifier: Modifier = Modifier
 ) {
     val arrived = participants.filter { it.displayMode != DisplayMode.HIDDEN }
-    val seats = expectedSeats.coerceAtLeast(arrived.size)
-    val emptyCount = (seats - arrived.size).coerceAtLeast(0)
+    val occupants = remember(arrived, currentUserId) {
+        SeatAllocator.allocate(arrived.map { it.userId }, currentUserId)
+    }
     val minutes = (timeLeft / 1000) / 60
     val seconds = (timeLeft / 1000) % 60
     val timeFormatted = String.format("%d:%02d", minutes, seconds)
-    val hallState = remember(arrived, currentUserId) {
-        MeditationHallState(
-            currentUserId = currentUserId,
-            occupants = SeatAllocator.allocate(arrived.map { it.userId }, currentUserId)
-        )
-    }
-    var use3d by remember { mutableStateOf(true) }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(HallCream)
     ) {
-        if (use3d) {
-            MeditationHallView(
-                state = hallState,
-                modifier = Modifier.fillMaxSize(),
-                onUnavailable = { use3d = false }
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 48.dp)
-            ) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
-                    contentPadding = PaddingValues(bottom = 12.dp)
-                ) {
-                    itemsIndexed(arrived, key = { _, p -> p.userId }) { _, person ->
-                        OccupiedCushion(name = person.label)
-                    }
-                    items(emptyCount) {
-                        EmptyCushion()
-                    }
-                }
-            }
-        }
+        PhotorealHall(
+            occupants = occupants,
+            modifier = Modifier.fillMaxSize()
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -111,7 +92,7 @@ fun HallSittingScreen(
                 Text(
                     text = hallName,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = Color(0xFF5C4A32),
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 12.dp, top = 2.dp),
@@ -124,13 +105,13 @@ fun HallSittingScreen(
                         fontSize = 16.sp,
                         letterSpacing = 1.sp
                     ),
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color(0xFF5C4A32)
                 )
             }
             Text(
                 text = "${arrived.size} meditators",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
+                color = Color(0xFF5C4A32).copy(alpha = 0.55f)
             )
             Spacer(Modifier.weight(1f))
             QuietButton(
@@ -144,56 +125,53 @@ fun HallSittingScreen(
 }
 
 @Composable
-private fun OccupiedCushion(name: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_sitter),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(30.dp)
-            )
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = name,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.78f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(72.dp)
+private fun PhotorealHall(
+    occupants: List<HallOccupant>,
+    modifier: Modifier = Modifier
+) {
+    val breath = rememberInfiniteTransition(label = "breath")
+    val breathScale by breath.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.012f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathScale"
+    )
+    BoxWithConstraints(modifier) {
+        Image(
+            painter = painterResource(R.drawable.hall_interior),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
         )
-    }
-}
-
-@Composable
-private fun EmptyCushion() {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(
-            modifier = Modifier.size(56.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_cushion),
+        val w = maxWidth
+        val h = maxHeight
+        val byId = SeatLayout.slots.associateBy { it.id }
+        occupants.sortedBy { byId[it.seatId]?.ny ?: 0f }.forEach { occ ->
+            val slot = byId[occ.seatId] ?: return@forEach
+            val sprite = SitterDrawables[abs(occ.userId.hashCode()) % SitterDrawables.size]
+            val size = w * slot.scale
+            val youBoost = if (occ.isCurrentUser) 1.03f else 1f
+            Image(
+                painter = painterResource(sprite),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.28f),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(
+                        x = w * slot.nx - size / 2f,
+                        y = h * slot.ny - size * 0.82f
+                    )
+                    .width(size)
+                    .graphicsLayer {
+                        scaleX = youBoost
+                        scaleY = breathScale * youBoost
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                    }
+                    .alpha(0.98f)
             )
         }
-        Spacer(Modifier.height(6.dp))
-        Spacer(Modifier.height(16.dp))
     }
 }
