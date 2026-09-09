@@ -14,8 +14,3 @@
 -keepclassmembers class kotlinx.coroutines.** {
     volatile <fields>;
 }
-
-# Filament JNI
--keep class com.google.android.filament.** { *; }
--keep class com.google.android.filament.filamat.** { *; }
--dontwarn com.google.android.filament.**
