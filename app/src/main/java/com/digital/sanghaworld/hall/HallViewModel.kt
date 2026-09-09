@@ -34,7 +34,8 @@ data class HallUiState(
     val sittingParticipants: List<ParticipantPresence> = emptyList(),
     val sittingCount: Int = 0,
     val sittingExpected: Int = 0,
-    val actionError: String? = null
+    val actionError: String? = null,
+    val suppressAutoSitKey: String? = null
 )
 
 class HallViewModel(application: Application) : AndroidViewModel(application) {
@@ -100,7 +101,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingParticipants = _state.value.sittingParticipants,
             sittingCount = _state.value.sittingCount,
             sittingExpected = _state.value.sittingExpected,
-            actionError = _state.value.actionError
+            actionError = _state.value.actionError,
+            suppressAutoSitKey = _state.value.suppressAutoSitKey
         )
     }
 
@@ -494,12 +496,19 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
     fun completeSession(attendedMillis: Long) {
         val sessionId = activeSessionId ?: return
         val hallId = activeHallId ?: return
+        val sitKey = "$hallId-${_state.value.selectedNextStart}"
         if (useRemote) {
             viewModelScope.launch(Dispatchers.IO) {
                 runCatching { api.leaveSession(sessionId) }
                 activeSessionId = null
                 activeHallId = null
-                _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0, sittingExpected = 0)
+                _state.value = _state.value.copy(
+                    sittingHallName = null,
+                    sittingParticipants = emptyList(),
+                    sittingCount = 0,
+                    sittingExpected = 0,
+                    suppressAutoSitKey = sitKey
+                )
                 refresh()
             }
             return
@@ -535,7 +544,13 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         engine.handleSessionCompleted()
         activeSessionId = null
         activeHallId = null
-        _state.value = _state.value.copy(sittingHallName = null, sittingParticipants = emptyList(), sittingCount = 0, sittingExpected = 0)
+        _state.value = _state.value.copy(
+            sittingHallName = null,
+            sittingParticipants = emptyList(),
+            sittingCount = 0,
+            sittingExpected = 0,
+            suppressAutoSitKey = sitKey
+        )
         refresh()
     }
 
@@ -637,7 +652,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingHallName = _state.value.sittingHallName,
             sittingParticipants = _state.value.sittingParticipants,
             sittingCount = _state.value.sittingCount,
-            sittingExpected = _state.value.sittingExpected
+            sittingExpected = _state.value.sittingExpected,
+            suppressAutoSitKey = _state.value.suppressAutoSitKey
         )
     }
 
@@ -663,7 +679,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingParticipants = _state.value.sittingParticipants,
             sittingCount = _state.value.sittingCount,
             sittingExpected = _state.value.sittingExpected,
-            actionError = _state.value.actionError
+            actionError = _state.value.actionError,
+            suppressAutoSitKey = _state.value.suppressAutoSitKey
         )
     }
 

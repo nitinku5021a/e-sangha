@@ -57,13 +57,13 @@ fun HallDetailScreen(
     val untilStart = if (startMillis > 0) startMillis - nowMillis else Long.MAX_VALUE
     val inSession = startMillis > 0 && nowMillis >= startMillis && nowMillis < startMillis + durationMillis
     val arrivalWindow = untilStart in 1..(15 * 60 * 1000L)
-    LaunchedEffect(hall.id, arrivalWindow, ui.selectedJoined) {
-        if (arrivalWindow && ui.selectedJoined) onArrive()
+    val sitKey = "${hall.id}-$startMillis"
+    val autoSitBlocked = ui.suppressAutoSitKey == sitKey
+    LaunchedEffect(hall.id, arrivalWindow, ui.selectedJoined, autoSitBlocked) {
+        if (arrivalWindow && ui.selectedJoined && !autoSitBlocked) onArrive()
     }
-    LaunchedEffect(hall.id, inSession, ui.selectedJoined) {
-        if (inSession && ui.selectedJoined) {
-            onEnter()
-            delay(1200)
+    LaunchedEffect(hall.id, inSession, ui.selectedJoined, autoSitBlocked) {
+        if (inSession && ui.selectedJoined && !autoSitBlocked) {
             onEnter()
         }
     }
