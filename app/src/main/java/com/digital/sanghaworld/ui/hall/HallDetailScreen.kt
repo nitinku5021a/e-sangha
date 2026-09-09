@@ -37,9 +37,9 @@ fun HallDetailScreen(
     val isCreator = ui.profile?.id != null && hall.creatorId == ui.profile.id
     val context = LocalContext.current
     val startLabel = if (ui.selectedNextStart > 0) {
-        Instant.ofEpochMilli(ui.selectedNextStart)
-            .atZone(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("EEE d MMM, HH:mm"))
+        val localStart = Instant.ofEpochMilli(ui.selectedNextStart).atZone(ZoneId.systemDefault())
+        localStart.format(DateTimeFormatter.ofPattern("EEE d MMM")) + ", " +
+            localStart.format(DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
     } else "—"
     val remaining = ui.selectedRemaining
     Column(

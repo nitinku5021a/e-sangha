@@ -1,7 +1,11 @@
 package com.digital.sanghaworld.ui.hall
 
+import android.app.TimePickerDialog
+import android.text.format.DateFormat
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,10 +16,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.digital.sanghaworld.hall.AudioType
@@ -30,6 +39,12 @@ import com.digital.sanghaworld.hall.HallVisibility
 import com.digital.sanghaworld.hall.ScheduleType
 import com.digital.sanghaworld.ui.QuietButton
 import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,17 +71,24 @@ fun CreateHallScreen(
     initialMinute: Int = 0,
     initialScheduleType: ScheduleType = ScheduleType.DAILY,
     initialVisibility: HallVisibility = HallVisibility.PUBLIC,
-    initialAudioType: AudioType = AudioType.BELL
+    initialAudioType: AudioType = AudioType.BELL,
+    initialTimeZone: String = ZoneId.systemDefault().id
 ) {
+    val context = LocalContext.current
+    val localInitial = remember(initialHour, initialMinute, initialTimeZone) {
+        wallClockToLocal(LocalTime.of(initialHour.coerceIn(0, 23), initialMinute.coerceIn(0, 59)), initialTimeZone)
+    }
     var name by remember { mutableStateOf(initialName) }
     var description by remember { mutableStateOf(initialDescription) }
     var duration by remember { mutableStateOf(initialDurationMinutes.toString()) }
-    var hour by remember { mutableStateOf(initialHour.toString()) }
-    var minute by remember { mutableStateOf(initialMinute.toString()) }
+    var startTime by remember { mutableStateOf(localInitial) }
     var scheduleType by remember { mutableStateOf(initialScheduleType) }
     var visibility by remember { mutableStateOf(initialVisibility) }
     var audioType by remember { mutableStateOf(initialAudioType) }
     var sunday by remember { mutableStateOf(initialScheduleType == ScheduleType.WEEKLY) }
+    val timeLabel = remember(startTime) {
+        startTime.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+    }
 
     Column(
         modifier = modifier
@@ -89,19 +111,40 @@ fun CreateHallScreen(
             singleLine = true
         )
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                hour, { if (it.all { c -> c.isDigit() }) hour = it },
-                label = { Text("Hour") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-                singleLine = true
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    TimePickerDialog(
+                        context,
+                        { _, hourOfDay, minuteOfHour ->
+                            startTime = LocalTime.of(hourOfDay, minuteOfHour)
+                        },
+                        startTime.hour,
+                        startTime.minute,
+                        DateFormat.is24HourFormat(context)
+                    ).show()
+                }
+        ) {
+            val fieldColors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant
             )
             OutlinedTextField(
-                minute, { if (it.all { c -> c.isDigit() }) minute = it },
-                label = { Text("Minute") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
+                value = timeLabel,
+                onValueChange = {},
+                enabled = false,
+                readOnly = true,
+                label = { Text("Start time") },
+                supportingText = { Text("Your local time") },
+                trailingIcon = {
+                    Icon(Icons.Outlined.Schedule, contentDescription = "Pick time")
+                },
+                colors = fieldColors,
+                modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
         }
@@ -134,8 +177,8 @@ fun CreateHallScreen(
                     name,
                     description,
                     duration.toIntOrNull() ?: 60,
-                    hour.toIntOrNull() ?: 6,
-                    minute.toIntOrNull() ?: 0,
+                    startTime.hour,
+                    startTime.minute,
                     scheduleType,
                     if (scheduleType == ScheduleType.WEEKLY) setOf(DayOfWeek.SUNDAY) else emptySet(),
                     visibility,
@@ -148,4 +191,13 @@ fun CreateHallScreen(
         QuietButton(text = "Cancel", onClick = onCancel, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(24.dp))
     }
+}
+
+private fun wallClockToLocal(time: LocalTime, zoneId: String): LocalTime {
+    val from = runCatching { ZoneId.of(zoneId) }.getOrDefault(ZoneId.systemDefault())
+    val local = ZoneId.systemDefault()
+    if (from == local) return time
+    return ZonedDateTime.of(LocalDate.now(from), time, from)
+        .withZoneSameInstant(local)
+        .toLocalTime()
 }

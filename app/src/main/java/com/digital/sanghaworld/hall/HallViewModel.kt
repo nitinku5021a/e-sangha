@@ -272,7 +272,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                                         description = description.trim(),
                                         durationSeconds = durationMinutes.coerceIn(1, 240) * 60,
                                         visibility = visibility,
-                                        audioType = audioType
+                                        audioType = audioType,
+                                        timezone = ZoneId.systemDefault().id
                                     )
                                 },
                                 schedules = s.schedules.map { sch ->
@@ -280,6 +281,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                                     else sch.copy(
                                         scheduleType = scheduleType,
                                         startLocalTime = LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)),
+                                        timezone = ZoneId.systemDefault().id,
                                         daysOfWeek = days
                                     )
                                 }

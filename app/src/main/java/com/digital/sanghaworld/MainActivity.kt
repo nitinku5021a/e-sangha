@@ -407,6 +407,7 @@ fun VipassanaApp(
                                         initialScheduleType = schedule?.scheduleType ?: ScheduleType.DAILY,
                                         initialVisibility = hall.visibility,
                                         initialAudioType = hall.audioType,
+                                        initialTimeZone = schedule?.timezone ?: hall.timezone,
                                         onCreate = { name, desc, dur, hour, minute, type, days, vis, audio ->
                                             hallViewModel.updateHall(
                                                 hall.id, name, desc, dur, hour, minute, type, days, vis, audio

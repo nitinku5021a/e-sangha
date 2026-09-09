@@ -32,6 +32,7 @@ import com.digital.sanghaworld.ui.QuietButton
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @Composable
 fun HallsHomeScreen(
@@ -113,9 +114,9 @@ private fun Section(title: String, cards: List<HallCard>, onOpen: (String) -> Un
 @Composable
 private fun HallCardRow(card: HallCard, onOpen: (String) -> Unit) {
     val shape = RoundedCornerShape(16.dp)
-    val time = Instant.ofEpochMilli(card.nextStartMillis)
-        .atZone(ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("EEE HH:mm"))
+    val localStart = Instant.ofEpochMilli(card.nextStartMillis).atZone(ZoneId.systemDefault())
+    val time = localStart.format(DateTimeFormatter.ofPattern("EEE")) + " " +
+        localStart.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     val subtitle = if (card.remainingSeconds != null) {
         val m = card.remainingSeconds / 60
         "${card.participantCount} sitting · ${m}m remaining"

@@ -10,6 +10,7 @@ import java.net.URL
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 
 class HallApi(
     private val tokens: TokenStore,
@@ -102,6 +103,7 @@ class HallApi(
             .put("daysOfWeek", JSONArray(days.map { it.name }))
             .put("visibility", visibility.name)
             .put("audioType", audioType.name)
+            .put("timezone", ZoneId.systemDefault().id)
         return request("POST", "/v1/halls", body).getString("id")
     }
 
@@ -127,6 +129,7 @@ class HallApi(
             .put("daysOfWeek", JSONArray(days.map { it.name }))
             .put("visibility", visibility.name)
             .put("audioType", audioType.name)
+            .put("timezone", ZoneId.systemDefault().id)
         request("POST", "/v1/halls/$id", body)
     }
 
