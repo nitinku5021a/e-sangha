@@ -21,6 +21,7 @@ import com.google.android.filament.Renderer
 import com.google.android.filament.Scene
 import com.google.android.filament.Skybox
 import com.google.android.filament.SwapChain
+import com.google.android.filament.Texture
 import com.google.android.filament.View
 import com.google.android.filament.Viewport
 import com.google.android.filament.android.DisplayHelper
@@ -34,9 +35,7 @@ class MeditationHallRenderer(
     private val surfaceView: SurfaceView
 ) {
     companion object {
-        init {
-            Filament.init()
-        }
+        init { Filament.init() }
     }
 
     private val choreographer = Choreographer.getInstance()
@@ -48,20 +47,27 @@ class MeditationHallRenderer(
     private val view: View = engine.createView()
     private val camera: Camera = engine.createCamera(engine.entityManager.create())
     private var swapChain: SwapChain? = null
-    private val cube: CubeGeometry = CubeGeometry(engine)
-    private val material: Material
+    private val meshes = MeshFactory(engine)
+    private val box = meshes.box(1f, 1f)
+    private val plane = meshes.plane(8f, 10f)
+    private val cylinder = meshes.cylinder(28, 1f)
+    private val sphere = meshes.sphere(16, 12)
+    private val figure = meshes.seatedFigure()
+    private val textures = HallTextures(context, engine)
+    private val lit: Material
+    private val emissive: Material
     private val instances = ArrayList<MaterialInstance>()
     private val entities = ArrayList<Int>()
     @Entity private var sun = 0
-    @Entity private var lamp = 0
+    @Entity private var fill = 0
+    @Entity private var altarLamp = 0
 
     private data class SeatVisual(
         val seatId: String,
         val x: Float,
         val z: Float,
         val sitter: Int,
-        val sitterMat: MaterialInstance,
-        val baseY: Float,
+        val mat: MaterialInstance,
         var visible: Boolean,
         var alpha: Float,
         val phase: Float
@@ -88,11 +94,36 @@ class MeditationHallRenderer(
 
     init {
         MaterialBuilder.init()
-        material = buildLitMaterial()
+        lit = compile(
+            "hall_lit",
+            MaterialBuilder.Shading.LIT,
+            MaterialBuilder.BlendingMode.TRANSPARENT,
+            """
+            void material(inout MaterialInputs material) {
+                prepareMaterial(material);
+                vec4 c = texture(materialParams_albedo, getUV0());
+                material.baseColor = vec4(c.rgb, materialParams.opacity);
+                material.roughness = 0.72;
+                material.metallic = 0.0;
+            }
+            """.trimIndent()
+        )
+        emissive = compile(
+            "hall_emit",
+            MaterialBuilder.Shading.UNLIT,
+            MaterialBuilder.BlendingMode.OPAQUE,
+            """
+            void material(inout MaterialInputs material) {
+                prepareMaterial(material);
+                material.baseColor = vec4(materialParams.emissive, 1.0);
+            }
+            """.trimIndent(),
+            textured = false
+        )
         MaterialBuilder.shutdown()
         setupView()
         setupLights()
-        buildHall()
+        buildArchitecture()
         buildSeats()
         uiHelper.renderCallback = object : UiHelper.RendererCallback {
             override fun onNativeWindowChanged(surface: Surface) {
@@ -100,7 +131,6 @@ class MeditationHallRenderer(
                 swapChain = engine.createSwapChain(surface)
                 displayHelper.attach(renderer, surfaceView.display)
             }
-
             override fun onDetachedFromSurface() {
                 displayHelper.detach()
                 swapChain?.let {
@@ -109,23 +139,20 @@ class MeditationHallRenderer(
                     swapChain = null
                 }
             }
-
             override fun onResized(width: Int, height: Int) {
                 val aspect = width.toDouble() / height.toDouble().coerceAtLeast(1.0)
-                camera.setProjection(28.0, aspect, 0.15, 40.0, Camera.Fov.VERTICAL)
+                camera.setProjection(32.0, aspect, 0.2, 50.0, Camera.Fov.VERTICAL)
                 view.viewport = Viewport(0, 0, width, height)
                 FilamentHelper.synchronizePendingFrames(engine)
             }
         }
         uiHelper.attachTo(surfaceView)
-        camera.lookAt(0.0, 5.4, 9.2, 0.0, 0.35, -2.4, 0.0, 1.0, 0.0)
+        camera.lookAt(0.0, 4.6, 8.4, 0.0, 0.55, -5.2, 0.0, 1.0, 0.0)
         camera.setExposure(16.0f, 1.0f / 125.0f, 100.0f)
         choreographer.postFrameCallback(frameCallback)
     }
 
-    fun setState(state: MeditationHallState) {
-        hallState = state
-    }
+    fun setState(state: MeditationHallState) { hallState = state }
 
     fun destroy() {
         if (destroyed) return
@@ -134,111 +161,126 @@ class MeditationHallRenderer(
         uiHelper.detach()
         entities.forEach { engine.destroyEntity(it) }
         engine.destroyEntity(sun)
-        engine.destroyEntity(lamp)
+        engine.destroyEntity(fill)
+        engine.destroyEntity(altarLamp)
         instances.forEach { engine.destroyMaterialInstance(it) }
-        engine.destroyMaterial(material)
-        cube.destroy(engine)
+        engine.destroyMaterial(lit)
+        engine.destroyMaterial(emissive)
+        listOf(box, plane, cylinder, sphere, figure).forEach { it.destroy(engine) }
+        textures.destroy(engine)
         engine.destroyRenderer(renderer)
         engine.destroyView(view)
         engine.destroyScene(scene)
         engine.destroyCameraComponent(camera.entity)
         val em = EntityManager.get()
         entities.forEach { em.destroy(it) }
-        em.destroy(sun)
-        em.destroy(lamp)
-        em.destroy(camera.entity)
+        em.destroy(sun); em.destroy(fill); em.destroy(altarLamp); em.destroy(camera.entity)
         engine.destroy()
     }
 
-    private fun buildLitMaterial(): Material {
-        val pkg = MaterialBuilder()
+    private fun compile(
+        name: String,
+        shading: MaterialBuilder.Shading,
+        blending: MaterialBuilder.BlendingMode,
+        body: String,
+        textured: Boolean = true
+    ): Material {
+        val b = MaterialBuilder()
             .platform(MaterialBuilder.Platform.MOBILE)
-            .name("hall_lit")
-            .shading(MaterialBuilder.Shading.LIT)
-            .blending(MaterialBuilder.BlendingMode.TRANSPARENT)
-            .uniformParameter(MaterialBuilder.UniformType.FLOAT4, "baseColor")
-            .material(
-                """
-                void material(inout MaterialInputs material) {
-                    prepareMaterial(material);
-                    material.baseColor = materialParams.baseColor;
-                    material.roughness = 0.82;
-                    material.metallic = 0.0;
-                }
-                """.trimIndent()
-            )
+            .name(name)
+            .shading(shading)
+            .blending(blending)
             .optimization(MaterialBuilder.Optimization.NONE)
-            .build(engine)
-        check(pkg.isValid) { "Hall material failed to compile." }
-        val buffer = pkg.buffer
-        return Material.Builder().payload(buffer, buffer.remaining()).build(engine)
+            .material(body)
+        if (textured) {
+            b.require(MaterialBuilder.VertexAttribute.UV0)
+            b.samplerParameter(MaterialBuilder.SamplerType.SAMPLER_2D, "albedo")
+            b.uniformParameter(MaterialBuilder.UniformType.FLOAT, "opacity")
+        } else {
+            b.uniformParameter(MaterialBuilder.UniformType.FLOAT3, "emissive")
+        }
+        val pkg = b.build(engine)
+        check(pkg.isValid) { "Material $name failed." }
+        val buf = pkg.buffer
+        return Material.Builder().payload(buf, buf.remaining()).build(engine)
     }
 
     private fun setupView() {
-        scene.skybox = Skybox.Builder().color(0.10f, 0.09f, 0.07f, 1.0f).build(engine)
+        scene.skybox = Skybox.Builder().color(0.83f, 0.86f, 0.88f, 1.0f).build(engine)
         view.camera = camera
         view.scene = scene
+        view.shadowingEnabled = true
     }
 
     private fun setupLights() {
         val em = EntityManager.get()
         sun = em.create()
-        val (r, g, b) = Colors.cct(4_200.0f)
+        val (r, g, b) = Colors.cct(4_800.0f)
         LightManager.Builder(LightManager.Type.DIRECTIONAL)
             .color(r, g, b)
-            .intensity(28_000.0f)
-            .direction(0.28f, -1.0f, -0.35f)
-            .castShadows(false)
+            .intensity(42_000.0f)
+            .direction(0.55f, -0.75f, -0.25f)
+            .castShadows(true)
             .build(engine, sun)
         scene.addEntity(sun)
-
-        lamp = em.create()
-        LightManager.Builder(LightManager.Type.POINT)
-            .color(1.0f, 0.82f, 0.55f)
-            .intensity(6_000.0f)
-            .position(0.0f, 1.8f, -6.4f)
-            .falloff(12.0f)
+        fill = em.create()
+        LightManager.Builder(LightManager.Type.DIRECTIONAL)
+            .color(1.0f, 0.96f, 0.90f)
+            .intensity(12_000.0f)
+            .direction(-0.35f, -1.0f, 0.15f)
             .castShadows(false)
-            .build(engine, lamp)
-        scene.addEntity(lamp)
+            .build(engine, fill)
+        scene.addEntity(fill)
+        altarLamp = em.create()
+        LightManager.Builder(LightManager.Type.POINT)
+            .color(1.0f, 0.84f, 0.62f)
+            .intensity(8_000.0f)
+            .position(0f, 2.2f, -6.6f)
+            .falloff(14f)
+            .castShadows(false)
+            .build(engine, altarLamp)
+        scene.addEntity(altarLamp)
     }
 
-    private fun buildHall() {
-        addBox(0f, -0.04f, -1.2f, 6.4f, 0.04f, 8.2f, 0.42f, 0.32f, 0.22f, 1f)
-        addBox(0f, 1.4f, -8.0f, 6.4f, 1.5f, 0.08f, 0.38f, 0.30f, 0.22f, 1f)
-        addBox(-6.3f, 1.4f, -1.2f, 0.08f, 1.5f, 8.2f, 0.36f, 0.28f, 0.20f, 1f)
-        addBox(6.3f, 1.4f, -1.2f, 0.08f, 1.5f, 8.2f, 0.36f, 0.28f, 0.20f, 1f)
-        addBox(0f, 0.28f, -6.6f, 1.6f, 0.28f, 0.55f, 0.28f, 0.18f, 0.10f, 1f)
-        addBox(0f, 0.85f, -6.55f, 0.22f, 0.32f, 0.22f, 0.72f, 0.58f, 0.28f, 1f)
-        addBox(-0.55f, 0.62f, -6.45f, 0.06f, 0.18f, 0.06f, 0.95f, 0.78f, 0.42f, 1f)
-        addBox(0.55f, 0.62f, -6.45f, 0.06f, 0.18f, 0.06f, 0.95f, 0.78f, 0.42f, 1f)
+    private fun buildArchitecture() {
+        place(plane, textures.woodFloor, 0f, 0f, -1.2f, 7.2f, 1f, 9.0f, 1f)
+        place(plane, textures.tatami, -2.35f, 0.01f, -1.0f, 2.5f, 1f, 7.4f, 1f)
+        place(plane, textures.tatami, 2.35f, 0.01f, -1.0f, 2.5f, 1f, 7.4f, 1f)
+        place(box, textures.woodWall, 0f, 2.6f, -8.4f, 7.2f, 2.7f, 0.08f, 1f)
+        place(box, textures.woodWall, -7.2f, 2.6f, -1.2f, 0.08f, 2.7f, 9.0f, 1f)
+        place(box, textures.woodWall, 7.2f, 2.6f, -1.2f, 0.08f, 2.7f, 9.0f, 1f)
+        place(plane, textures.woodWall, 0f, 5.35f, -1.2f, 7.2f, 1f, 9.0f, 1f)
+        for (i in 0..8) {
+            val z = -8.0f + i * 1.7f
+            place(box, textures.woodFloor, 0f, 5.15f, z, 7.1f, 0.06f, 0.10f, 1f)
+        }
+        for (x in listOf(-3.9f, 3.9f)) {
+            place(cylinder, textures.woodFloor, x, 2.3f, -0.4f, 0.16f, 2.3f, 0.16f, 1f)
+            place(cylinder, textures.woodFloor, x, 2.3f, 3.4f, 0.16f, 2.3f, 0.16f, 1f)
+        }
+        place(box, textures.plaster, 0f, 0.42f, -7.35f, 1.5f, 0.42f, 0.55f, 1f)
+        place(cylinder, textures.plaster, 0f, 1.15f, -7.35f, 0.18f, 0.32f, 0.18f, 1f)
+        place(sphere, textures.plaster, 0f, 1.58f, -7.35f, 0.16f, 0.16f, 0.16f, 1f)
+        emitWindow(-2.35f, 2.4f, -8.28f, 1.05f, 1.7f)
+        emitWindow(2.35f, 2.4f, -8.28f, 1.05f, 1.7f)
+        emitWindow(-7.12f, 2.5f, -3.2f, 0.04f, 1.5f, 2.2f)
+        emitWindow(7.12f, 2.5f, -3.2f, 0.04f, 1.5f, 2.2f)
+    }
+
+    private fun emitWindow(x: Float, y: Float, z: Float, sx: Float, sy: Float, sz: Float = 0.04f) {
+        val mat = emissive.createInstance()
+        mat.setParameter("emissive", 0.95f, 0.97f, 0.99f)
+        instances += mat
+        spawn(box, mat, x, y, z, sx, sy, sz, shadows = false)
     }
 
     private fun buildSeats() {
-        val cols = SeatLayout.COLUMNS
-        val rows = SeatLayout.ROWS
-        val x0 = -(cols - 1) * 0.95f / 2f
-        val z0 = -4.4f
-        SeatLayout.seatIds.forEachIndexed { index, id ->
-            val col = index % cols
-            val row = index / cols
-            val x = x0 + col * 0.95f
-            val z = z0 + row * 1.15f
-            addBox(x, 0.07f, z, 0.32f, 0.07f, 0.32f, 0.45f, 0.28f, 0.18f, 1f)
-            val sitterMat = tint(0.18f, 0.16f, 0.14f, 0f)
-            val sitter = addBoxEntity(x, 0.42f, z, 0.16f, 0.28f, 0.16f, sitterMat)
-            seats += SeatVisual(
-                seatId = id,
-                x = x,
-                z = z,
-                sitter = sitter,
-                sitterMat = sitterMat,
-                baseY = 0.42f,
-                visible = false,
-                alpha = 0f,
-                phase = (index * 0.7f)
-            )
+        SeatLayout.slots.forEachIndexed { index, slot ->
+            place(cylinder, textures.beige, slot.x, 0.07f, slot.z, 0.32f, 0.07f, 0.32f, 1f)
+            val mat = textured(textures.robe, 0f)
+            val sitter = spawn(figure, mat, slot.x, 0.08f, slot.z, 1f, 1f, 1f, shadows = true)
             scene.removeEntity(sitter)
+            seats += SeatVisual(slot.id, slot.x, slot.z, sitter, mat, false, 0f, index * 0.63f)
         }
     }
 
@@ -246,9 +288,8 @@ class MeditationHallRenderer(
         val t = frameTimeNanos / 1_000_000_000.0
         val occupied = hallState.occupants.associateBy { it.seatId }
         seats.forEach { seat ->
-            val occupant = occupied[seat.seatId]
-            val wantVisible = occupant != null
-            val target = if (wantVisible) 1f else 0f
+            val occ = occupied[seat.seatId]
+            val target = if (occ != null) 1f else 0f
             seat.alpha += (target - seat.alpha) * 0.08f
             if (seat.alpha < 0.02f && seat.visible) {
                 scene.removeEntity(seat.sitter)
@@ -257,40 +298,50 @@ class MeditationHallRenderer(
                 scene.addEntity(seat.sitter)
                 seat.visible = true
             }
-            if (occupant?.isCurrentUser == true) {
-                seat.sitterMat.setParameter("baseColor", 0.42f, 0.32f, 0.18f, seat.alpha)
-            } else {
-                seat.sitterMat.setParameter("baseColor", 0.16f, 0.14f, 0.12f, seat.alpha)
-            }
+            seat.mat.setParameter("opacity", seat.alpha)
             if (seat.visible) {
-                val breath = 1f + 0.018f * sin(t * 1.15 + seat.phase.toDouble()).toFloat()
-                setTransform(seat.sitter, seat.x, seat.baseY * breath, seat.z, 0.16f, 0.28f * breath, 0.16f)
+                val breath = 1f + 0.016f * sin(t * 1.12 + seat.phase).toFloat()
+                setTransform(seat.sitter, seat.x, 0.08f, seat.z, 1f, breath, 1f)
             }
         }
     }
 
-    private fun addBox(
+    private fun place(
+        mesh: GpuMesh, tex: Texture,
         x: Float, y: Float, z: Float,
         sx: Float, sy: Float, sz: Float,
-        r: Float, g: Float, b: Float, a: Float
-    ): Int = addBoxEntity(x, y, z, sx, sy, sz, tint(r, g, b, a))
+        opacity: Float
+    ) {
+        spawn(mesh, textured(tex, opacity), x, y, z, sx, sy, sz, shadows = true)
+    }
 
-    private fun addBoxEntity(
+    private fun spawn(
+        mesh: GpuMesh, mat: MaterialInstance,
         x: Float, y: Float, z: Float,
         sx: Float, sy: Float, sz: Float,
-        mat: MaterialInstance
+        shadows: Boolean
     ): Int {
-        val entity = EntityManager.get().create()
+        val e = EntityManager.get().create()
         RenderableManager.Builder(1)
-            .boundingBox(cube.boundingBox)
-            .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, cube.vertexBuffer, cube.indexBuffer, 0, cube.indexCount)
+            .boundingBox(mesh.boundingBox)
+            .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, mesh.vertexBuffer, mesh.indexBuffer, 0, mesh.indexCount)
             .material(0, mat)
+            .castShadows(shadows)
+            .receiveShadows(true)
             .culling(false)
-            .build(engine, entity)
-        setTransform(entity, x, y, z, sx, sy, sz)
-        scene.addEntity(entity)
-        entities += entity
-        return entity
+            .build(engine, e)
+        setTransform(e, x, y, z, sx, sy, sz)
+        scene.addEntity(e)
+        entities += e
+        return e
+    }
+
+    private fun textured(tex: Texture, opacity: Float): MaterialInstance {
+        val inst = lit.createInstance()
+        inst.setParameter("albedo", tex, textures.sampler)
+        inst.setParameter("opacity", opacity)
+        instances += inst
+        return inst
     }
 
     private fun setTransform(entity: Int, x: Float, y: Float, z: Float, sx: Float, sy: Float, sz: Float) {
@@ -300,12 +351,5 @@ class MeditationHallRenderer(
         Matrix.scaleM(m, 0, sx, sy, sz)
         val tm = engine.transformManager
         tm.setTransform(tm.getInstance(entity), m)
-    }
-
-    private fun tint(r: Float, g: Float, b: Float, a: Float): MaterialInstance {
-        val inst = material.createInstance()
-        inst.setParameter("baseColor", r, g, b, a)
-        instances += inst
-        return inst
     }
 }
