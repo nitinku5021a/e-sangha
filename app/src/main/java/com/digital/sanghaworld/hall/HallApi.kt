@@ -206,6 +206,16 @@ class HallApi(
         }
     }
 
+    fun hallStats(hallId: String): HallStats {
+        val o = request("GET", "/v1/halls/$hallId/stats")
+        return HallStats(
+            sessionCount = o.optInt("sessionCount"),
+            totalAttendance = o.optInt("totalAttendance"),
+            uniqueParticipants = o.optInt("uniqueParticipants"),
+            totalMeditationSeconds = o.optLong("totalMeditationSeconds")
+        )
+    }
+
     fun setSupporter(enabled: Boolean) {
         request(
             "POST",

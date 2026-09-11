@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Intent
+import com.digital.sanghaworld.hall.CompletionStatus
 import com.digital.sanghaworld.hall.HallUiState
 import com.digital.sanghaworld.ui.QuietButton
 import java.time.Instant
@@ -62,11 +63,7 @@ fun HallDetailScreen(
     LaunchedEffect(hall.id, arrivalWindow, ui.selectedJoined, autoSitBlocked) {
         if (arrivalWindow && ui.selectedJoined && !autoSitBlocked) onArrive()
     }
-    LaunchedEffect(hall.id, inSession, ui.selectedJoined, autoSitBlocked) {
-        if (inSession && ui.selectedJoined && !autoSitBlocked) {
-            onEnter()
-        }
-    }
+    // Sitting is started from the hall scene Join Meditation action.
     val startLabel = if (ui.selectedNextStart > 0) {
         val localStart = Instant.ofEpochMilli(ui.selectedNextStart).atZone(ZoneId.systemDefault())
         localStart.format(DateTimeFormatter.ofPattern("EEE d MMM")) + ", " +
@@ -120,7 +117,32 @@ fun HallDetailScreen(
         Spacer(Modifier.height(6.dp))
         Meta("Sessions recorded", "${ui.stats.sessionCount}")
         Meta("Total sittings", "${ui.stats.totalAttendance}")
+        Meta("People who sat", "${ui.stats.uniqueParticipants}")
         Meta("Meditation minutes", "${ui.stats.totalMeditationSeconds / 60}")
+        val hallLogs = ui.logs.filter { it.hallId == hall.id }.take(12)
+        if (hallLogs.isEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Sittings in this hall will appear here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
+            )
+        } else {
+            Spacer(Modifier.height(8.dp))
+            hallLogs.forEach { log ->
+                val mark = when (log.completionStatus) {
+                    CompletionStatus.COMPLETED -> "✓"
+                    CompletionStatus.PARTIAL -> "partial"
+                    else -> "—"
+                }
+                Text(
+                    "${log.date.format(DateTimeFormatter.ofPattern("d MMM"))}  ·  ${log.durationSeconds / 60} min  ·  $mark",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+            }
+        }
         if (!ui.actionError.isNullOrBlank()) {
             Spacer(Modifier.height(8.dp))
             Text(

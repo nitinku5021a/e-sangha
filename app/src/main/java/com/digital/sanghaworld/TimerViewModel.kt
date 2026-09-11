@@ -131,6 +131,7 @@ class TimerViewModel : ViewModel() {
     }
 
     fun stopTimer(context: Context) {
+        _isRunning.value = false
         timerService?.stopTimer()
         val intent = Intent(context, TimerService::class.java)
         intent.action = TimerService.ACTION_STOP

@@ -8,6 +8,7 @@ import com.meditationhall.db.MeditationSessions
 import com.meditationhall.db.now
 import com.meditationhall.db.uuid
 import com.meditationhall.db.Users
+import com.meditationhall.dto.HallStatsDto
 import com.meditationhall.dto.LogDto
 import com.meditationhall.dto.ParticipantDto
 import com.meditationhall.dto.SessionDto
@@ -176,7 +177,8 @@ class SessionService(private val hub: RealtimeHub) {
                     hallName = it[MeditationLogs.hallName],
                     date = it[MeditationLogs.date],
                     durationSeconds = it[MeditationLogs.durationSeconds],
-                    completionStatus = it[MeditationLogs.completionStatus]
+                    completionStatus = it[MeditationLogs.completionStatus],
+                    sessionId = it[MeditationLogs.sessionId].toString()
                 )
             }
     }
@@ -188,6 +190,19 @@ class SessionService(private val hub: RealtimeHub) {
             sessionsAttended = mine.size,
             sessionsCompleted = mine.count { it[MeditationLogs.completionStatus] == "COMPLETED" },
             totalMeditationSeconds = mine.sumOf { it[MeditationLogs.durationSeconds].toLong() }
+        )
+    }
+
+    fun hallStats(hallId: UUID): HallStatsDto = transaction {
+        val logs = MeditationLogs.selectAll().filter { it[MeditationLogs.hallId] == hallId }
+        val att = Attendance.selectAll().filter { it[Attendance.hallId] == hallId }
+        val sessionIds = (logs.map { it[MeditationLogs.sessionId] } + att.map { it[Attendance.sessionId] }).distinct()
+        val people = (logs.map { it[MeditationLogs.userId] } + att.map { it[Attendance.userId] }).distinct()
+        HallStatsDto(
+            sessionCount = sessionIds.size,
+            totalAttendance = att.size.coerceAtLeast(logs.size),
+            uniqueParticipants = people.size,
+            totalMeditationSeconds = logs.sumOf { it[MeditationLogs.durationSeconds].toLong() }
         )
     }
 

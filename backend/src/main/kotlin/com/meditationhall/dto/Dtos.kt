@@ -119,7 +119,8 @@ data class LogDto(
     val hallName: String,
     val date: String,
     val durationSeconds: Int,
-    val completionStatus: String
+    val completionStatus: String,
+    val sessionId: String = ""
 )
 
 @Serializable
@@ -127,6 +128,14 @@ data class StatsDto(
     val sessionsExpected: Int,
     val sessionsAttended: Int,
     val sessionsCompleted: Int,
+    val totalMeditationSeconds: Long
+)
+
+@Serializable
+data class HallStatsDto(
+    val sessionCount: Int,
+    val totalAttendance: Int,
+    val uniqueParticipants: Int,
     val totalMeditationSeconds: Long
 )
 

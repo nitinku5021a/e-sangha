@@ -35,7 +35,9 @@ data class HallUiState(
     val sittingCount: Int = 0,
     val sittingExpected: Int = 0,
     val actionError: String? = null,
-    val suppressAutoSitKey: String? = null
+    val suppressAutoSitKey: String? = null,
+    val seats: List<MeditationSeat> = emptyList(),
+    val meditating: Boolean = false
 )
 
 class HallViewModel(application: Application) : AndroidViewModel(application) {
@@ -53,6 +55,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var sessionJoinMillis: Long = 0
         private set
+    private var assignedSeatId: Int? = null
 
     init {
         refresh()
@@ -82,6 +85,16 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             (disc.sittingNow + disc.startingSoon + disc.myHalls).firstOrNull { c -> c.hall.id == it }
                 ?: runCatching { api.getHall(it) }.getOrNull()
         }
+        val hallLogs = selectedId?.let { id -> logs.filter { it.hallId == id } }.orEmpty()
+        val statsFromLogs = if (hallLogs.isEmpty()) HallStats(0, 0, 0, 0) else HallStats(
+            sessionCount = hallLogs.map { it.sessionId.ifBlank { it.id } }.distinct().size,
+            totalAttendance = hallLogs.size,
+            uniqueParticipants = hallLogs.map { it.userId }.distinct().size.coerceAtLeast(1),
+            totalMeditationSeconds = hallLogs.sumOf { it.durationSeconds.toLong() }
+        )
+        val stats = selectedId?.let { id ->
+            runCatching { api.hallStats(id) }.getOrNull()?.takeIf { it.sessionCount > 0 || it.totalAttendance > 0 }
+        } ?: statsFromLogs
         return HallUiState(
             discovery = disc,
             selectedHall = card?.hall,
@@ -90,6 +103,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             selectedParticipantCount = card?.participantCount ?: 0,
             selectedNextStart = card?.nextStartMillis ?: 0,
             selectedRemaining = card?.remainingSeconds,
+            stats = stats,
             logs = logs,
             supportRequests = reqs,
             relationships = rels,
@@ -102,8 +116,56 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingCount = _state.value.sittingCount,
             sittingExpected = _state.value.sittingExpected,
             actionError = _state.value.actionError,
-            suppressAutoSitKey = _state.value.suppressAutoSitKey
+            suppressAutoSitKey = _state.value.suppressAutoSitKey,
+            seats = _state.value.seats,
+            meditating = _state.value.meditating
         )
+    }
+
+    fun prepareHallScene() {
+        val current = _state.value
+        val seats = HallSeatLayout.seedOccupied(
+            seats = HallSeatLayout.standard(),
+            live = current.sittingParticipants,
+            currentUserId = current.profile?.id.orEmpty(),
+            userJoined = current.meditating,
+            assignedSeatId = assignedSeatId
+        )
+        _state.value = current.copy(seats = seats)
+    }
+
+    fun joinMeditation() {
+        val current = _state.value
+        val layout = HallSeatLayout.seedOccupied(
+            seats = HallSeatLayout.standard(),
+            live = current.sittingParticipants,
+            currentUserId = current.profile?.id.orEmpty(),
+            userJoined = current.meditating,
+            assignedSeatId = assignedSeatId
+        )
+        val empty = layout.firstOrNull { !it.occupied } ?: return
+        assignedSeatId = empty.id
+        val seats = HallSeatLayout.seedOccupied(
+            seats = HallSeatLayout.standard(),
+            live = current.sittingParticipants,
+            currentUserId = current.profile?.id.orEmpty(),
+            userJoined = true,
+            assignedSeatId = empty.id
+        )
+        _state.value = current.copy(seats = seats, meditating = true)
+    }
+
+    fun leaveMeditationSeat() {
+        assignedSeatId = null
+        val current = _state.value
+        val seats = HallSeatLayout.seedOccupied(
+            seats = HallSeatLayout.standard(),
+            live = current.sittingParticipants.filter { it.userId != current.profile?.id },
+            currentUserId = current.profile?.id.orEmpty(),
+            userJoined = false,
+            assignedSeatId = null
+        )
+        _state.value = current.copy(seats = seats, meditating = false)
     }
 
     fun openHall(hallId: String) {
@@ -134,6 +196,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             _state.value = ui
+            prepareHallScene()
         }
     }
 
@@ -405,6 +468,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                         sittingParticipants = people,
                         sittingCount = people.size
                     )
+                    prepareHallScene()
                 }
             }
         }
@@ -497,18 +561,21 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         val sessionId = activeSessionId ?: return
         val hallId = activeHallId ?: return
         val sitKey = "$hallId-${_state.value.selectedNextStart}"
+        activeSessionId = null
+        activeHallId = null
+        assignedSeatId = null
+        _state.value = _state.value.copy(
+            sittingHallName = null,
+            sittingParticipants = emptyList(),
+            sittingCount = 0,
+            sittingExpected = 0,
+            suppressAutoSitKey = sitKey,
+            meditating = false
+        )
+        leaveMeditationSeat()
         if (useRemote) {
             viewModelScope.launch(Dispatchers.IO) {
                 runCatching { api.leaveSession(sessionId) }
-                activeSessionId = null
-                activeHallId = null
-                _state.value = _state.value.copy(
-                    sittingHallName = null,
-                    sittingParticipants = emptyList(),
-                    sittingCount = 0,
-                    sittingExpected = 0,
-                    suppressAutoSitKey = sitKey
-                )
                 refresh()
             }
             return
@@ -542,15 +609,6 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             s.copy(attendance = updatedAttendance, logs = listOf(log) + s.logs)
         }
         engine.handleSessionCompleted()
-        activeSessionId = null
-        activeHallId = null
-        _state.value = _state.value.copy(
-            sittingHallName = null,
-            sittingParticipants = emptyList(),
-            sittingCount = 0,
-            sittingExpected = 0,
-            suppressAutoSitKey = sitKey
-        )
         refresh()
     }
 
@@ -653,7 +711,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingParticipants = _state.value.sittingParticipants,
             sittingCount = _state.value.sittingCount,
             sittingExpected = _state.value.sittingExpected,
-            suppressAutoSitKey = _state.value.suppressAutoSitKey
+            suppressAutoSitKey = _state.value.suppressAutoSitKey,
+            seats = _state.value.seats,
+            meditating = _state.value.meditating
         )
     }
 
@@ -680,7 +740,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingCount = _state.value.sittingCount,
             sittingExpected = _state.value.sittingExpected,
             actionError = _state.value.actionError,
-            suppressAutoSitKey = _state.value.suppressAutoSitKey
+            suppressAutoSitKey = _state.value.suppressAutoSitKey,
+            seats = _state.value.seats,
+            meditating = _state.value.meditating
         )
     }
 

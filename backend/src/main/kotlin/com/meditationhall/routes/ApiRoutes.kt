@@ -144,6 +144,11 @@ fun Route.apiRoutes(
             val user = auth.requireUser(call.request.header("Authorization"))
             call.respond(sessions.stats(user))
         }
+        get("/halls/{id}/stats") {
+            auth.requireUser(call.request.header("Authorization"))
+            val id = UUID.fromString(call.parameters["id"])
+            call.respond(sessions.hallStats(id))
+        }
 
         post("/support/requests") {
             val user = auth.requireUser(call.request.header("Authorization"))

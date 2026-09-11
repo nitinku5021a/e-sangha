@@ -4,16 +4,23 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -22,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -45,46 +53,59 @@ fun HallsHomeScreen(
     modifier: Modifier = Modifier
 ) {
     var code by remember { mutableStateOf("") }
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = "Meditation halls",
-            style = MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp),
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = "Sit together. Stay silent.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
-            modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
-        )
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .padding(bottom = 88.dp)
+        ) {
+            Text(
+                text = "Meditation halls",
+                style = MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp),
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Sit together. Stay silent.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+                modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
+            )
 
-        QuietButton(text = "Create hall", onClick = onCreate, emphasized = true, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            QuietButton(text = "Support", onClick = onSupport, modifier = Modifier.weight(1f))
-            QuietButton(text = "Hall log", onClick = onLogs, modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                QuietButton(text = "Support", onClick = onSupport, modifier = Modifier.weight(1f))
+                QuietButton(text = "Hall log", onClick = onLogs, modifier = Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = code,
+                onValueChange = { code = it },
+                label = { Text("Share code") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            QuietButton(text = "Open by code", onClick = { onJoinCode(code) }, modifier = Modifier.fillMaxWidth())
+
+            Section("Sitting now", ui.discovery.sittingNow, onOpenHall)
+            Section("Starting soon", ui.discovery.startingSoon, onOpenHall)
+            Section("My halls", ui.discovery.myHalls, onOpenHall)
+            Spacer(Modifier.height(24.dp))
         }
-        Spacer(Modifier.height(16.dp))
-        OutlinedTextField(
-            value = code,
-            onValueChange = { code = it },
-            label = { Text("Share code") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(8.dp))
-        QuietButton(text = "Open by code", onClick = { onJoinCode(code) }, modifier = Modifier.fillMaxWidth())
-
-        Section("Sitting now", ui.discovery.sittingNow, onOpenHall)
-        Section("Starting soon", ui.discovery.startingSoon, onOpenHall)
-        Section("My halls", ui.discovery.myHalls, onOpenHall)
-        Spacer(Modifier.height(24.dp))
+        FloatingActionButton(
+            onClick = onCreate,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 20.dp, bottom = 20.dp),
+            shape = CircleShape,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "Create hall")
+        }
     }
 }
 
