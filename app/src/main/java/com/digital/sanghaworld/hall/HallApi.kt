@@ -91,7 +91,10 @@ class HallApi(
         scheduleType: ScheduleType,
         days: Set<DayOfWeek>,
         visibility: HallVisibility,
-        audioType: AudioType
+        audioType: AudioType,
+        audioUrl: String? = null,
+        audioFileName: String? = null,
+        audioDurationSeconds: Int? = null
     ): String {
         val body = JSONObject()
             .put("name", name)
@@ -104,6 +107,9 @@ class HallApi(
             .put("visibility", visibility.name)
             .put("audioType", audioType.name)
             .put("timezone", ZoneId.systemDefault().id)
+            .put("audioUrl", audioUrl ?: JSONObject.NULL)
+            .put("audioFileName", audioFileName ?: JSONObject.NULL)
+            .put("audioDurationSeconds", audioDurationSeconds ?: JSONObject.NULL)
         return request("POST", "/v1/halls", body).getString("id")
     }
 
@@ -117,7 +123,10 @@ class HallApi(
         scheduleType: ScheduleType,
         days: Set<DayOfWeek>,
         visibility: HallVisibility,
-        audioType: AudioType
+        audioType: AudioType,
+        audioUrl: String? = null,
+        audioFileName: String? = null,
+        audioDurationSeconds: Int? = null
     ) {
         val body = JSONObject()
             .put("name", name)
@@ -130,6 +139,9 @@ class HallApi(
             .put("visibility", visibility.name)
             .put("audioType", audioType.name)
             .put("timezone", ZoneId.systemDefault().id)
+            .put("audioUrl", audioUrl ?: JSONObject.NULL)
+            .put("audioFileName", audioFileName ?: JSONObject.NULL)
+            .put("audioDurationSeconds", audioDurationSeconds ?: JSONObject.NULL)
         request("POST", "/v1/halls/$id", body)
     }
 
@@ -299,7 +311,10 @@ class HallApi(
             timezone = o.getString("timezone"),
             status = HallStatus.valueOf(o.getString("status")),
             shareCode = o.getString("shareCode"),
-            audioType = runCatching { AudioType.valueOf(o.getString("audioType")) }.getOrDefault(AudioType.BELL)
+            audioType = runCatching { AudioType.valueOf(o.getString("audioType")) }.getOrDefault(AudioType.BELL),
+            audioUrl = o.optString("audioUrl").takeIf { it.isNotBlank() },
+            audioFileName = o.optString("audioFileName").takeIf { it.isNotBlank() },
+            audioDurationSeconds = o.optInt("audioDurationSeconds").takeIf { it > 0 }
         )
         val time = o.optString("startLocalTime").takeIf { it.isNotBlank() } ?: "06:00"
         val schedule = HallSchedule(

@@ -191,6 +191,9 @@ class HallStore(private val context: Context) {
                         put("status", h.status.name)
                         put("shareCode", h.shareCode)
                         put("audioType", h.audioType.name)
+                        put("audioUrl", h.audioUrl ?: JSONObject.NULL)
+                        put("audioFileName", h.audioFileName ?: JSONObject.NULL)
+                        put("audioDurationSeconds", h.audioDurationSeconds ?: JSONObject.NULL)
                         put("createdAtMillis", h.createdAtMillis)
                     })
                 }
@@ -304,6 +307,9 @@ class HallStore(private val context: Context) {
                 status = HallStatus.valueOf(h.optString("status", "ACTIVE")),
                 shareCode = h.getString("shareCode"),
                 audioType = AudioType.valueOf(h.optString("audioType", "BELL")),
+                audioUrl = h.optString("audioUrl").takeIf { it.isNotBlank() },
+                audioFileName = h.optString("audioFileName").takeIf { it.isNotBlank() },
+                audioDurationSeconds = h.optInt("audioDurationSeconds").takeIf { it > 0 },
                 createdAtMillis = h.optLong("createdAtMillis", 0L)
             )
         }

@@ -239,6 +239,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         days: Set<DayOfWeek>,
         visibility: HallVisibility,
         audioType: AudioType,
+        audioUrl: String? = null,
+        audioFileName: String? = null,
+        audioDurationSeconds: Int? = null,
         onCreated: (String?) -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -248,12 +251,14 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                     if (useRemote) {
                         api.createHall(
                             name, description, durationMinutes, hour, minute,
-                            scheduleType, days, visibility, audioType
+                            scheduleType, days, visibility, audioType,
+                            audioUrl, audioFileName, audioDurationSeconds
                         )
                     } else {
                         createHallLocal(
                             name, description, durationMinutes, hour, minute,
-                            scheduleType, days, visibility, audioType
+                            scheduleType, days, visibility, audioType,
+                            audioUrl, audioFileName, audioDurationSeconds
                         )
                     }
                 }
@@ -273,7 +278,10 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         scheduleType: ScheduleType,
         days: Set<DayOfWeek>,
         visibility: HallVisibility,
-        audioType: AudioType
+        audioType: AudioType,
+        audioUrl: String? = null,
+        audioFileName: String? = null,
+        audioDurationSeconds: Int? = null
     ): String {
         val hallId = HallIds.newId()
         mutate { s ->
@@ -283,10 +291,13 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 name = name.trim().ifBlank { "Untitled hall" },
                 description = description.trim(),
                 visibility = visibility,
-                durationSeconds = (durationMinutes.coerceIn(1, 240)) * 60,
+                durationSeconds = (durationMinutes.coerceIn(1, 720)) * 60,
                 timezone = ZoneId.systemDefault().id,
                 shareCode = HallIds.shareCode(),
-                audioType = audioType
+                audioType = audioType,
+                audioUrl = audioUrl,
+                audioFileName = audioFileName,
+                audioDurationSeconds = audioDurationSeconds
             )
             val schedule = HallSchedule(
                 id = HallIds.newId(),
@@ -317,6 +328,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         days: Set<DayOfWeek>,
         visibility: HallVisibility,
         audioType: AudioType,
+        audioUrl: String? = null,
+        audioFileName: String? = null,
+        audioDurationSeconds: Int? = null,
         onDone: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch {
@@ -326,7 +340,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                     if (useRemote) {
                         api.updateHall(
                             hallId, name, description, durationMinutes, hour, minute,
-                            scheduleType, days, visibility, audioType
+                            scheduleType, days, visibility, audioType,
+                            audioUrl, audioFileName, audioDurationSeconds
                         )
                     } else {
                         mutate { s ->
@@ -337,9 +352,12 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                                     else hall.copy(
                                         name = name.trim().ifBlank { "Untitled hall" },
                                         description = description.trim(),
-                                        durationSeconds = durationMinutes.coerceIn(1, 240) * 60,
+                                        durationSeconds = durationMinutes.coerceIn(1, 720) * 60,
                                         visibility = visibility,
                                         audioType = audioType,
+                                        audioUrl = if (audioType == AudioType.FILE) audioUrl else null,
+                                        audioFileName = if (audioType == AudioType.FILE) audioFileName else null,
+                                        audioDurationSeconds = if (audioType == AudioType.FILE) audioDurationSeconds else null,
                                         timezone = ZoneId.systemDefault().id
                                     )
                                 },

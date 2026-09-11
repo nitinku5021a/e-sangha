@@ -48,7 +48,10 @@ data class CreateHallRequest(
     val daysOfWeek: List<String> = emptyList(),
     val visibility: String = "PUBLIC",
     val audioType: String = "BELL",
-    val timezone: String = "UTC"
+    val timezone: String = "UTC",
+    val audioUrl: String? = null,
+    val audioFileName: String? = null,
+    val audioDurationSeconds: Int? = null
 )
 
 @Serializable
@@ -62,7 +65,10 @@ data class UpdateHallRequest(
     val daysOfWeek: List<String>? = null,
     val visibility: String? = null,
     val audioType: String? = null,
-    val timezone: String? = null
+    val timezone: String? = null,
+    val audioUrl: String? = null,
+    val audioFileName: String? = null,
+    val audioDurationSeconds: Int? = null
 )
 
 @Serializable
@@ -77,6 +83,9 @@ data class HallDto(
     val status: String,
     val shareCode: String,
     val audioType: String,
+    val audioUrl: String? = null,
+    val audioFileName: String? = null,
+    val audioDurationSeconds: Int? = null,
     val nextStartMillis: Long? = null,
     val remainingSeconds: Long? = null,
     val participantCount: Int = 0,

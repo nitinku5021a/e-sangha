@@ -109,7 +109,14 @@ fun HallDetailScreen(
             Spacer(Modifier.height(8.dp))
         }
         Meta("Visibility", hall.visibility.name.lowercase().replaceFirstChar { it.titlecase() })
-        Meta("Audio", hall.audioType.name.lowercase().replaceFirstChar { it.titlecase() })
+        Meta(
+            "Audio",
+            when (hall.audioType) {
+                com.digital.sanghaworld.hall.AudioType.FILE ->
+                    hall.audioFileName?.takeIf { it.isNotBlank() } ?: "Custom audio"
+                else -> hall.audioType.name.lowercase().replaceFirstChar { it.titlecase() }
+            }
+        )
         Meta("Share code", hall.shareCode)
         Meta("Expected now", "${ui.selectedParticipantCount} people")
         Spacer(Modifier.height(8.dp))

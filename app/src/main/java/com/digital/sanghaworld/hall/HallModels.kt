@@ -36,6 +36,9 @@ data class Hall(
     val status: HallStatus = HallStatus.ACTIVE,
     val shareCode: String,
     val audioType: AudioType = AudioType.BELL,
+    val audioUrl: String? = null,
+    val audioFileName: String? = null,
+    val audioDurationSeconds: Int? = null,
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 

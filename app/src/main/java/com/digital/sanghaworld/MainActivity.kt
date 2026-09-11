@@ -71,6 +71,8 @@ import com.digital.sanghaworld.ui.hall.HallLogScreen
 import com.digital.sanghaworld.ui.hall.HallSittingScreen
 import com.digital.sanghaworld.ui.hall.HallsHomeScreen
 import com.digital.sanghaworld.ui.hall.MeditationHallScreen
+import com.digital.sanghaworld.audio.HallGuidedAudioPlayer
+import com.digital.sanghaworld.hall.AudioType
 import com.digital.sanghaworld.ui.theme.VipassanaTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -151,6 +153,26 @@ fun VipassanaApp(
     var hallMuted by remember { mutableStateOf(false) }
     var hallFocus by remember { mutableStateOf(false) }
 
+    fun startHallAudio(remainingMillis: Long) {
+        val hall = hallUi.selectedHall ?: return
+        val url = hall.audioUrl
+        if (hall.audioType != AudioType.FILE || url.isNullOrBlank() || remainingMillis <= 0) {
+            HallGuidedAudioPlayer.stop()
+            return
+        }
+        val elapsed = (hall.durationSeconds * 1000L - remainingMillis).coerceAtLeast(0)
+        HallGuidedAudioPlayer.start(context, url, elapsed, remainingMillis, hallMuted)
+    }
+
+    LaunchedEffect(hallMuted) {
+        HallGuidedAudioPlayer.setMuted(hallMuted)
+    }
+    LaunchedEffect(hasCompleted) {
+        if (hasCompleted) {
+            HallGuidedAudioPlayer.stop()
+        }
+    }
+
     if (!authState.ready) {
         return
     }
@@ -177,6 +199,7 @@ fun VipassanaApp(
         }
         val stopSit = {
             val attended = (totalDuration - timeLeft).coerceAtLeast(0)
+            HallGuidedAudioPlayer.stop()
             viewModel.stopTimer(context)
             if (hallViewModel.activeSessionId != null) {
                 hallViewModel.completeSession(attended)
@@ -418,8 +441,11 @@ fun VipassanaApp(
                     } else if (showHalls) {
                         when (hallPage) {
                             "create" -> CreateHallScreen(
-                                onCreate = { name, desc, dur, hour, minute, type, days, vis, audio ->
-                                    hallViewModel.createHall(name, desc, dur, hour, minute, type, days, vis, audio) { id ->
+                                onCreate = { name, desc, dur, hour, minute, type, days, vis, audio, audioUrl, audioName, audioDur ->
+                                    hallViewModel.createHall(
+                                        name, desc, dur, hour, minute, type, days, vis, audio,
+                                        audioUrl, audioName, audioDur
+                                    ) { id ->
                                         if (id != null) hallPage = "detail"
                                     }
                                 },
@@ -444,9 +470,13 @@ fun VipassanaApp(
                                         initialVisibility = hall.visibility,
                                         initialAudioType = hall.audioType,
                                         initialTimeZone = schedule?.timezone ?: hall.timezone,
-                                        onCreate = { name, desc, dur, hour, minute, type, days, vis, audio ->
+                                        initialAudioUrl = hall.audioUrl,
+                                        initialAudioFileName = hall.audioFileName,
+                                        initialAudioDurationSeconds = hall.audioDurationSeconds,
+                                        onCreate = { name, desc, dur, hour, minute, type, days, vis, audio, audioUrl, audioName, audioDur ->
                                             hallViewModel.updateHall(
-                                                hall.id, name, desc, dur, hour, minute, type, days, vis, audio
+                                                hall.id, name, desc, dur, hour, minute, type, days, vis, audio,
+                                                audioUrl, audioName, audioDur
                                             ) { ok ->
                                                 if (ok) hallPage = "detail"
                                             }
@@ -473,6 +503,7 @@ fun VipassanaApp(
                                         hallViewModel.joinMeditation()
                                         hallViewModel.enterSession(id) { remaining ->
                                             if (remaining != null) {
+                                                startHallAudio(remaining)
                                                 viewModel.startTimer(context, remaining, skipPrep = true)
                                             }
                                         }
@@ -515,6 +546,7 @@ fun VipassanaApp(
                                         hallViewModel.joinMeditation()
                                         hallViewModel.enterSession(hallId) { remaining ->
                                             if (remaining != null) {
+                                                startHallAudio(remaining)
                                                 viewModel.startTimer(context, remaining, skipPrep = true)
                                             }
                                         }

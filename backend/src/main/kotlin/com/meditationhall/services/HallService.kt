@@ -55,6 +55,9 @@ class HallService {
                 status = row[Halls.status],
                 shareCode = row[Halls.shareCode],
                 audioType = row[Halls.audioType],
+                audioUrl = row[Halls.audioUrl],
+                audioFileName = row[Halls.audioFileName],
+                audioDurationSeconds = row[Halls.audioDurationSeconds],
                 nextStartMillis = next,
                 remainingSeconds = remaining,
                 participantCount = if (remaining != null) members else members,
@@ -87,11 +90,14 @@ class HallService {
             it[name] = body.name.trim().ifBlank { "Untitled hall" }
             it[description] = body.description
             it[visibility] = body.visibility
-            it[durationSeconds] = body.durationMinutes.coerceIn(1, 240) * 60
+            it[durationSeconds] = body.durationMinutes.coerceIn(1, 720) * 60
             it[timezone] = body.timezone
             it[status] = "ACTIVE"
             it[shareCode] = code.take(12)
             it[audioType] = body.audioType
+            it[audioUrl] = body.audioUrl?.trim()?.takeIf { it.isNotBlank() }
+            it[audioFileName] = body.audioFileName?.trim()?.takeIf { it.isNotBlank() }
+            it[audioDurationSeconds] = body.audioDurationSeconds?.takeIf { it > 0 }
             it[createdAt] = now()
             it[updatedAt] = now()
         }
@@ -139,9 +145,18 @@ class HallService {
             Halls.update({ Halls.id eq hallId }) {
                 body.name?.let { n -> it[name] = n.trim().ifBlank { "Untitled hall" } }
                 body.description?.let { d -> it[description] = d }
-                body.durationMinutes?.let { m -> it[durationSeconds] = m.coerceIn(1, 240) * 60 }
+                body.durationMinutes?.let { m -> it[durationSeconds] = m.coerceIn(1, 720) * 60 }
                 visibility?.let { v -> it[Halls.visibility] = v }
                 audioType?.let { a -> it[Halls.audioType] = a }
+                if (audioType == "FILE") {
+                    body.audioUrl?.let { u -> it[Halls.audioUrl] = u.trim().takeIf { s -> s.isNotBlank() } }
+                    body.audioFileName?.let { n -> it[Halls.audioFileName] = n.trim().takeIf { s -> s.isNotBlank() } }
+                    body.audioDurationSeconds?.let { d -> it[Halls.audioDurationSeconds] = d.takeIf { s -> s > 0 } }
+                } else if (audioType != null) {
+                    it[Halls.audioUrl] = null
+                    it[Halls.audioFileName] = null
+                    it[Halls.audioDurationSeconds] = null
+                }
                 body.timezone?.let { tz -> it[timezone] = tz }
                 it[updatedAt] = now()
             }
