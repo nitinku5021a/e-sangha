@@ -71,6 +71,7 @@ fun MeditationHallScreen(
     muted: Boolean,
     focusMode: Boolean,
     onJoin: () -> Unit,
+    onPreviewAudio: (() -> Unit)? = null,
     onLeaveMeditation: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleFocus: () -> Unit,
@@ -127,30 +128,35 @@ fun MeditationHallScreen(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             HallArchitecture(Modifier.fillMaxSize())
             if (timeLeftMillis != null && timeLeftMillis > 0) {
-                Text(
-                    formatClock(timeLeftMillis),
-                    color = Ink,
-                    style = MaterialTheme.typography.titleMedium,
+                Column(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(12.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Cream.copy(alpha = 0.92f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                )
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFFFFF6E0))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("REMAINING", color = Color(0xFF8C4E12), style = MaterialTheme.typography.labelSmall)
+                    Text(formatClock(timeLeftMillis), color = Ink, style = MaterialTheme.typography.headlineSmall)
+                }
             }
             if (untilStart > 0) {
-                Text(
-                    "Meditation starts in ${formatLead(untilStart)}",
-                    color = Ink,
-                    style = MaterialTheme.typography.bodyMedium,
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 24.dp, vertical = 20.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Cream.copy(alpha = 0.94f))
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+                        .padding(horizontal = 28.dp, vertical = 24.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(Color(0xFFFFF6E0))
+                        .padding(horizontal = 28.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("MEDITATION STARTS IN", color = Color(0xFF8C4E12), style = MaterialTheme.typography.labelSmall)
+                    Spacer(Modifier.height(4.dp))
+                    Text(formatClock(untilStart), color = Ink, style = MaterialTheme.typography.displaySmall)
+                    Spacer(Modifier.height(2.dp))
+                    Text(formatLead(untilStart), color = Ink.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium)
+                }
             }
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val pw = maxWidth
@@ -196,6 +202,17 @@ fun MeditationHallScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp)
             )
+            if (onPreviewAudio != null) {
+                Text(
+                    "Preview audio",
+                    color = Color(0xFF8C4E12),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .clickable(onClick = onPreviewAudio)
+                        .padding(bottom = 8.dp)
+                )
+            }
             JoinButton(onJoin)
             Spacer(Modifier.height(16.dp))
         } else {

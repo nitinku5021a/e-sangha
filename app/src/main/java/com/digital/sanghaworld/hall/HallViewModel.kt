@@ -123,6 +123,61 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    fun refreshCommunity() {
+        viewModelScope.launch {
+            val remote = withContext(Dispatchers.IO) {
+                runCatching {
+                    connectRemote()
+                    if (useRemote) api.communityPeople() else emptyList()
+                }.getOrDefault(emptyList())
+            }
+            applyCommunity(remote)
+        }
+    }
+
+    fun enterCommunity() {
+        viewModelScope.launch {
+            val remote = withContext(Dispatchers.IO) {
+                runCatching {
+                    connectRemote()
+                    if (useRemote) api.communityJoin() else emptyList()
+                }.getOrDefault(emptyList())
+            }
+            joinMeditation()
+            applyCommunity(remote)
+        }
+    }
+
+    fun beatCommunity() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                if (useRemote) api.communityHeartbeat()
+            }
+        }
+    }
+
+    fun leaveCommunity() {
+        leaveMeditationSeat()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { if (useRemote) api.communityLeave() }
+        }
+    }
+
+    private fun applyCommunity(remote: List<Pair<String, String>>) {
+        val me = _state.value.profile
+        val people = remote.map { (id, name) ->
+            ParticipantPresence(id, name.ifBlank { "Someone" }, DisplayMode.AVATAR)
+        }.toMutableList()
+        if (_state.value.meditating && me != null && people.none { it.userId == me.id }) {
+            people += ParticipantPresence(me.id, me.displayName.ifBlank { "You" }, DisplayMode.AVATAR)
+        }
+        _state.value = _state.value.copy(
+            sittingParticipants = people,
+            selectedParticipantCount = people.size
+        )
+        prepareHallScene()
+    }
+
     fun prepareHallScene() {
         val current = _state.value
         val seats = HallSeatLayout.seedOccupied(

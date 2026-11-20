@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +24,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +38,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.digital.sanghaworld.audio.AudioDurationProbe
 import com.digital.sanghaworld.audio.GongCatalog
+import com.digital.sanghaworld.audio.GongPreviewPlayer
+import com.digital.sanghaworld.audio.HallGuidedAudioPlayer
 import com.digital.sanghaworld.audio.DriveAudioCatalog
 import com.digital.sanghaworld.audio.DriveAudioFile
 import com.digital.sanghaworld.hall.AudioType
@@ -108,6 +113,14 @@ fun CreateHallScreen(
         mutableStateOf(
             GongCatalog.byId(initialAudioFileName ?: GongCatalog.DEFAULT_ID).id
         )
+    }
+    var previewName by remember { mutableStateOf<String?>(null) }
+    val bellPreview = remember { GongPreviewPlayer(context.applicationContext) }
+    DisposableEffect(Unit) {
+        onDispose {
+            bellPreview.stop()
+            HallGuidedAudioPlayer.stop()
+        }
     }
     var driveLink by remember { mutableStateOf(initialAudioUrl.orEmpty()) }
     var audioFiles by remember { mutableStateOf(emptyList<DriveAudioFile>()) }
@@ -205,7 +218,10 @@ fun CreateHallScreen(
             Spacer(Modifier.height(10.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 GongCatalog.all.forEach { sound ->
-                    ChoiceChip(sound.title, bellId == sound.id, onClick = { bellId = sound.id })
+                    ChoiceChip(sound.title, bellId == sound.id, onClick = {
+                        bellPreview.play(sound.resId)
+                        bellId = sound.id
+                    })
                 }
             }
         }
@@ -233,19 +249,7 @@ fun CreateHallScreen(
                             audioStatus = "No audio found. Check that the folder is public and contains mp3/m4a/wav files."
                         } else {
                             audioStatus = "${files.size} audio file${if (files.size == 1) "" else "s"} found."
-                            if (files.size == 1) {
-                                selectedAudio = files.first()
-                                val seconds = withContext(Dispatchers.IO) {
-                                    AudioDurationProbe.durationSeconds(files.first().playbackUrl)
-                                }
-                                audioDurationSeconds = seconds
-                                if (seconds != null) {
-                                    val mins = ((seconds + 59) / 60).coerceAtLeast(1)
-                                    val current = duration.toIntOrNull() ?: 0
-                                    if (mins > current) duration = mins.toString()
-                                    audioStatus = "Length $mins min. Sitting time is set to match if it was shorter; you can still change it."
-                                }
-                            }
+                            audioStatus = "Listen to a file, then choose it."
                         }
                     }
                 },
@@ -253,35 +257,49 @@ fun CreateHallScreen(
             )
             if (audioFiles.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
-                SectionLabel("Choose audio")
+                SectionLabel("Listen, then choose")
                 Spacer(Modifier.height(8.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    audioFiles.forEach { file ->
-                        ChoiceChip(
-                            label = file.name,
-                            selected = selectedAudio?.playbackUrl == file.playbackUrl || selectedAudio?.name == file.name,
-                            onClick = {
-                                selectedAudio = file
-                                audioStatus = "Reading duration…"
-                                scope.launch {
-                                    val seconds = withContext(Dispatchers.IO) {
-                                        AudioDurationProbe.durationSeconds(file.playbackUrl)
-                                    }
-                                    audioDurationSeconds = seconds
-                                    if (seconds != null) {
-                                        val mins = ((seconds + 59) / 60).coerceAtLeast(1)
-                                        val current = duration.toIntOrNull() ?: 0
-                                        if (mins > current) duration = mins.toString()
-                                        audioStatus = "Length $mins min. Sitting time is set to match if it was shorter; you can still change it."
-                                    } else {
-                                        audioStatus = "Could not read length. You can still use this file."
-                                    }
+                audioFiles.forEach { file ->
+                    val chosen = selectedAudio?.playbackUrl == file.playbackUrl
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text(
+                            file.name + if (chosen) "  ·  chosen" else "",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = {
+                            if (previewName == file.name) {
+                                HallGuidedAudioPlayer.stop()
+                                previewName = null
+                            } else {
+                                HallGuidedAudioPlayer.start(context, file.playbackUrl, 0L, 20_000L, false)
+                                previewName = file.name
+                            }
+                        }) { Text(if (previewName == file.name) "Stop" else "Preview") }
+                        TextButton(onClick = {
+                            HallGuidedAudioPlayer.stop()
+                            previewName = null
+                            selectedAudio = file
+                            audioStatus = "Reading duration…"
+                            scope.launch {
+                                val seconds = withContext(Dispatchers.IO) {
+                                    AudioDurationProbe.durationSeconds(file.playbackUrl)
+                                }
+                                audioDurationSeconds = seconds
+                                if (seconds != null) {
+                                    val mins = ((seconds + 59) / 60).coerceAtLeast(1)
+                                    val current = duration.toIntOrNull() ?: 0
+                                    if (mins > current) duration = mins.toString()
+                                    audioStatus = "Chosen. Length $mins min."
+                                } else {
+                                    audioStatus = "Chosen. Length could not be read."
                                 }
                             }
-                        )
+                        }) { Text(if (chosen) "Chosen" else "Choose") }
                     }
                 }
             }

@@ -12,6 +12,7 @@ import com.meditationhall.dto.SupporterProfileBody
 import com.meditationhall.dto.TimeResponse
 import com.meditationhall.dto.WsEvent
 import com.meditationhall.realtime.RealtimeHub
+import com.meditationhall.services.CommunityService
 import com.meditationhall.services.HallService
 import com.meditationhall.services.SessionService
 import com.meditationhall.services.SupportService
@@ -36,6 +37,7 @@ fun Route.apiRoutes(
     halls: HallService,
     sessions: SessionService,
     support: SupportService,
+    community: CommunityService,
     hub: RealtimeHub
 ) {
     val json = Json { ignoreUnknownKeys = true }
@@ -64,6 +66,24 @@ fun Route.apiRoutes(
         }
         get("/time") {
             call.respond(TimeResponse(System.currentTimeMillis()))
+        }
+        get("/community") {
+            auth.requireUser(call.request.header("Authorization"))
+            call.respond(community.present())
+        }
+        post("/community/join") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            call.respond(community.join(user))
+        }
+        post("/community/heartbeat") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            community.heartbeat(user)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post("/community/leave") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            community.leave(user)
+            call.respond(HttpStatusCode.NoContent)
         }
 
         get("/halls") {

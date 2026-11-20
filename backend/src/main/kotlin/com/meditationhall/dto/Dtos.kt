@@ -38,6 +38,12 @@ data class AuthResponse(val token: String, val userId: String, val displayName: 
 data class TimeResponse(val serverTimeMillis: Long)
 
 @Serializable
+data class CommunityPerson(val userId: String, val displayName: String)
+
+@Serializable
+data class CommunityPresenceResponse(val people: List<CommunityPerson>)
+
+@Serializable
 data class CreateHallRequest(
     val name: String,
     val description: String = "",

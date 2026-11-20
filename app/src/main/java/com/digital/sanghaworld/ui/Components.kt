@@ -1,5 +1,6 @@
 package com.digital.sanghaworld.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,10 +33,21 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-val SanghaCardShape = RoundedCornerShape(18.dp)
+val SanghaCardShape = RoundedCornerShape(24.dp)
 val SanghaPillShape = RoundedCornerShape(50)
-val SanghaFieldShape = RoundedCornerShape(14.dp)
+val SanghaFieldShape = RoundedCornerShape(16.dp)
 val SanghaScreenPadding = 24.dp
+
+@Composable
+fun SanghaMark(modifier: Modifier = Modifier, size: Dp = 48.dp) {
+    Canvas(modifier.size(size)) {
+        val r = this.size.minDimension / 2f
+        drawCircle(color = Color(0xFFE8A23A), radius = r)
+        drawCircle(color = Color(0xFFFFF6E0), radius = r * 0.72f)
+        drawCircle(color = Color(0xFFE26A1E), radius = r * 0.34f)
+        drawCircle(color = Color(0xFFFFF6E0), radius = r * 0.12f)
+    }
+}
 
 @Composable
 fun QuietButton(
@@ -47,14 +59,14 @@ fun QuietButton(
 ) {
     val shape = SanghaPillShape
     val bg = when {
-        !enabled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+        !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         emphasized -> MaterialTheme.colorScheme.primary
-        else -> Color.Transparent
+        else -> MaterialTheme.colorScheme.surfaceVariant
     }
     val border = when {
-        !enabled -> MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+        !enabled -> MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
         emphasized -> Color.Transparent
-        else -> MaterialTheme.colorScheme.outline
+        else -> Color.Transparent
     }
     val fg = when {
         !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
@@ -126,7 +138,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.42f),
+        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.78f),
         modifier = modifier
     )
 }
@@ -165,7 +177,6 @@ fun SanghaCard(
         modifier = modifier
             .clip(SanghaCardShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f), SanghaCardShape)
             .then(clickMod)
             .padding(horizontal = 18.dp, vertical = 16.dp)
     ) {
@@ -304,7 +315,7 @@ fun MetaRow(label: String, value: String) {
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.82f)
         )
         Text(
             value,

@@ -28,7 +28,7 @@ object DatabaseFactory {
                 Users, UserDevices, RefreshTokens, Halls, HallMemberships, HallSchedules,
                 MeditationSessions, Attendance, MeditationLogs,
                 SupporterProfiles, SupportRequests, SupportMatches,
-                SupportRelationships, Notifications
+                SupportRelationships, CommunityPresence, Notifications
             )
             seedIfEmpty()
         }

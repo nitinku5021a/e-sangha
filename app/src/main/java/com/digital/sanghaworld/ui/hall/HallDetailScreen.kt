@@ -142,7 +142,7 @@ fun HallDetailScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = SanghaScreenPadding, vertical = 8.dp)
     ) {
-        Text(hall.name, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
+        Text(hall.name, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(6.dp))
         Text(
             when {
@@ -158,7 +158,7 @@ fun HallDetailScreen(
             Text(
                 hall.description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f)
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
         if (canEnter && !inSession) {
@@ -166,7 +166,7 @@ fun HallDetailScreen(
             Text(
                 "The hall is open. You can take a seat. The sitting begins at the scheduled time.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.62f)
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 
@@ -191,7 +191,7 @@ fun HallDetailScreen(
                 Text(
                     "Audio",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f)
                 )
                 Text(
                     audioLabel + if (previewing) " · playing" else "",
@@ -201,7 +201,11 @@ fun HallDetailScreen(
             }
             if (canPreview) {
                 TextButton(onClick = { togglePreview() }) {
-                    Text(if (previewing) "Stop" else "Listen")
+                    Text(
+                        if (previewing) "Stop preview" else "Preview audio",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -222,7 +226,7 @@ fun HallDetailScreen(
                 Text(
                     "${formatClockShort(positionMs)} / ${formatClockShort(durationMs)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(onClick = {
@@ -237,7 +241,7 @@ fun HallDetailScreen(
         Text(
             "Record",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.42f)
+            color = MaterialTheme.colorScheme.primary
         )
         MetaRow("Sessions", "${ui.stats.sessionCount}")
         MetaRow("Attendance", "${ui.stats.totalAttendance}")
@@ -248,7 +252,7 @@ fun HallDetailScreen(
             Text(
                 "Sittings in this hall will appear here.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
             )
         } else {

@@ -43,6 +43,7 @@ fun Application.module() {
     val halls = HallService()
     val sessions = SessionService(hub)
     val support = SupportService()
+    val community = CommunityService()
     SessionScheduler(sessions, halls).start()
 
     install(CallId) {
@@ -80,7 +81,7 @@ fun Application.module() {
         }
     }
     routing {
-        apiRoutes(auth, halls, sessions, support, hub)
+        apiRoutes(auth, halls, sessions, support, community, hub)
     }
 }
 

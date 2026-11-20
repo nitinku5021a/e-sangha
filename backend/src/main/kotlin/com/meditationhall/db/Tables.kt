@@ -160,6 +160,14 @@ object SupportRelationships : Table("support_relationships") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object CommunityPresence : Table("community_presence") {
+    val userId = uuid("user_id").references(Users.id)
+    val displayName = varchar("display_name", 120)
+    val joinedAt = timestamp("joined_at")
+    val lastSeenAt = timestamp("last_seen_at")
+    override val primaryKey = PrimaryKey(userId)
+}
+
 object Notifications : Table("notifications") {
     val id = uuid("id")
     val idempotencyKey = varchar("idempotency_key", 160).uniqueIndex()

@@ -336,6 +336,32 @@ class HallApi(
         )
     }
 
+    fun communityPeople(): List<Pair<String, String>> {
+        val res = request("GET", "/v1/community")
+        return parsePeople(res)
+    }
+
+    fun communityJoin(): List<Pair<String, String>> {
+        val res = request("POST", "/v1/community/join", JSONObject())
+        return parsePeople(res)
+    }
+
+    fun communityHeartbeat() {
+        request("POST", "/v1/community/heartbeat", JSONObject())
+    }
+
+    fun communityLeave() {
+        request("POST", "/v1/community/leave", JSONObject())
+    }
+
+    private fun parsePeople(res: JSONObject): List<Pair<String, String>> {
+        val arr = res.optJSONArray("people") ?: return emptyList()
+        return (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            o.getString("userId") to o.optString("displayName", "Someone")
+        }
+    }
+
     private fun request(method: String, path: String, body: JSONObject? = null, auth: Boolean = true): JSONObject {
         val raw = requestRaw(method, path, body, auth)
         if (raw.isBlank()) return JSONObject()

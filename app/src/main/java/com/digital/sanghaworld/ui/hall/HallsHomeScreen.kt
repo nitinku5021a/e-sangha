@@ -2,6 +2,7 @@ package com.digital.sanghaworld.ui.hall
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.digital.sanghaworld.hall.HallCard
@@ -42,6 +43,7 @@ import java.time.format.FormatStyle
 fun HallsHomeScreen(
     ui: HallUiState,
     onOpenHall: (HallCard) -> Unit,
+    onOpenCommunity: () -> Unit = {},
     onJoinCode: (String) -> Unit,
     openJoinCode: Boolean = false,
     onJoinCodeConsumed: () -> Unit = {},
@@ -66,35 +68,7 @@ fun HallsHomeScreen(
         )
     }
 
-    if (rooms.isEmpty()) {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(horizontal = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(Modifier.height(72.dp))
-            Text(
-                "No halls scheduled",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Halls you have joined are listed first. Within that, the soonest sitting is at the top.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
-                textAlign = TextAlign.Center
-            )
-            if (!ui.actionError.isNullOrBlank()) {
-                Spacer(Modifier.height(16.dp))
-                StatusText(ui.actionError, error = true)
-            }
-        }
-    } else {
-        LazyColumn(
+    LazyColumn(
             modifier = modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
@@ -108,12 +82,37 @@ fun HallsHomeScreen(
                     )
                 }
             }
+            item {
+                Text(
+                    "ALWAYS OPEN",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
+                )
+                CommunityRoomRow(onClick = onOpenCommunity)
+                Text(
+                    "SCHEDULED HALLS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 4.dp)
+                )
+                if (rooms.isEmpty()) {
+                    Text(
+                        "No scheduled halls yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+                }
+            }
             items(rooms, key = { it.hall.id }) { card ->
-                HallRoomRow(card, onClick = { onOpenHall(card) })
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                HallRoomRow(
+                    card,
+                    onClick = { onOpenHall(card) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
             }
         }
-    }
 
     if (showCodeDialog) {
         AlertDialog(
@@ -162,7 +161,32 @@ private fun DayOfWeek.shortName(): String =
     name.lowercase().replaceFirstChar { it.titlecase() }.take(3)
 
 @Composable
-private fun HallRoomRow(card: HallCard, onClick: () -> Unit) {
+private fun CommunityRoomRow(onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 18.dp)
+    ) {
+        Text(
+            "Community Room",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Open all day. Your own timer and bell. Names of who is sitting are shared.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+    }
+}
+
+@Composable
+private fun HallRoomRow(card: HallCard, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val localStart = Instant.ofEpochMilli(card.nextStartMillis).atZone(ZoneId.systemDefault())
     val whenLabel = localStart.format(DateTimeFormatter.ofPattern("EEE")) + " " +
         localStart.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
@@ -175,10 +199,12 @@ private fun HallRoomRow(card: HallCard, onClick: () -> Unit) {
         "$whenLabel · $frequency · ${card.participantCount} expected"
     }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -197,13 +223,16 @@ private fun HallRoomRow(card: HallCard, onClick: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                if (card.joined) "Joined" else "Not joined",
+                if (card.joined) "Joined" else "Open",
                 style = MaterialTheme.typography.labelMedium,
-                color = if (card.joined) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
-                }
+                color = if (card.joined) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        if (card.joined) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             )
             if (sitting) {
                 Spacer(Modifier.height(3.dp))
