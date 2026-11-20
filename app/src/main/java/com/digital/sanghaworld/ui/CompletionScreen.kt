@@ -32,21 +32,21 @@ fun CompletionScreen(
     ) {
         Text(
             text = "COMPLETE",
-            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 4.sp),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp),
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = title,
-            style = MaterialTheme.typography.displaySmall,
-            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(20.dp))
         Text(
             text = formatDuration(totalDuration),
-            style = MaterialTheme.typography.displayLarge.copy(fontSize = 52.sp),
-            color = MaterialTheme.colorScheme.onBackground
+            style = MaterialTheme.typography.displayLarge.copy(fontSize = 48.sp),
+            color = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.height(40.dp))
         QuietButton(text = "Done", emphasized = true, onClick = onDone)

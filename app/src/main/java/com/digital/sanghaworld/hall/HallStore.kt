@@ -9,7 +9,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import kotlin.math.abs
 
 class HallStore(private val context: Context) {
     private val lock = Any()
@@ -40,7 +39,7 @@ class HallStore(private val context: Context) {
                 schedule = schedule,
                 nextStartMillis = next,
                 remainingSeconds = remaining,
-                participantCount = estimatedParticipants(hall, remaining != null, next, nowMillis),
+                participantCount = state.memberships.count { it.hallId == hall.id },
                 joined = state.memberships.any { it.hallId == hall.id && it.userId == state.profile.id }
             )
         }
@@ -84,14 +83,6 @@ class HallStore(private val context: Context) {
             ScheduleType.WEEKLY, ScheduleType.CUSTOM ->
                 schedule.daysOfWeek.isEmpty() || day.dayOfWeek in schedule.daysOfWeek
         } && (schedule.startDate == null || !day.isBefore(schedule.startDate) || isToday)
-    }
-
-    private fun estimatedParticipants(hall: Hall, active: Boolean, nextStart: Long, now: Long): Int {
-        val seed = abs(hall.id.hashCode() % 17)
-        return if (active) 8 + seed else {
-            val hoursUntil = ((nextStart - now) / 3_600_000L).coerceAtLeast(0)
-            (4 + seed - hoursUntil.toInt()).coerceAtLeast(1)
-        }
     }
 
     private fun persist(state: HallState) {

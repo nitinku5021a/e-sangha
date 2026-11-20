@@ -1,46 +1,38 @@
 package com.digital.sanghaworld.ui.hall
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.hall.HallCard
 import com.digital.sanghaworld.hall.HallUiState
+import com.digital.sanghaworld.hall.ScheduleType
+import java.time.DayOfWeek
+import com.digital.sanghaworld.ui.SanghaField
+import com.digital.sanghaworld.ui.StatusText
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -49,171 +41,178 @@ import java.time.format.FormatStyle
 @Composable
 fun HallsHomeScreen(
     ui: HallUiState,
-    onOpenHall: (String) -> Unit,
-    onCreate: () -> Unit,
-    onSupport: () -> Unit,
-    onLogs: () -> Unit,
+    onOpenHall: (HallCard) -> Unit,
     onJoinCode: (String) -> Unit,
+    openJoinCode: Boolean = false,
+    onJoinCodeConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     var showCodeDialog by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
-    Box(modifier = modifier.fillMaxSize()) {
+    LaunchedEffect(openJoinCode) {
+        if (openJoinCode) {
+            showCodeDialog = true
+            onJoinCodeConsumed()
+        }
+    }
+
+    val rooms = remember(ui.discovery) {
+        (ui.discovery.sittingNow + ui.discovery.startingSoon + ui.discovery.myHalls)
+            .distinctBy { it.hall.id }
+            .sortedWith(
+            compareBy<HallCard> { !it.joined }
+                .thenBy { it.remainingSeconds == null }
+                .thenBy { it.nextStartMillis }
+        )
+    }
+
+    if (rooms.isEmpty()) {
         Column(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 8.dp)
-                .padding(bottom = 88.dp)
+                .padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Meditation halls",
-                        style = MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp),
-                        color = MaterialTheme.colorScheme.primary
+            Spacer(Modifier.height(72.dp))
+            Text(
+                "No halls scheduled",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Halls you have joined are listed first. Within that, the soonest sitting is at the top.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+                textAlign = TextAlign.Center
+            )
+            if (!ui.actionError.isNullOrBlank()) {
+                Spacer(Modifier.height(16.dp))
+                StatusText(ui.actionError, error = true)
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            if (!ui.actionError.isNullOrBlank()) {
+                item {
+                    StatusText(
+                        ui.actionError,
+                        error = true,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                     )
-                    Text(
-                        text = "Sit together. Stay silent.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
-                        modifier = Modifier.padding(top = 6.dp, bottom = 8.dp)
-                    )
-                }
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(
-                            Icons.Outlined.MoreVert,
-                            contentDescription = "More",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = menuOpen,
-                        onDismissRequest = { menuOpen = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Support") },
-                            onClick = {
-                                menuOpen = false
-                                onSupport()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Hall log") },
-                            onClick = {
-                                menuOpen = false
-                                onLogs()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Open by code") },
-                            onClick = {
-                                menuOpen = false
-                                showCodeDialog = true
-                            }
-                        )
-                    }
                 }
             }
-
-            Section("Sitting now", ui.discovery.sittingNow, onOpenHall)
-            Section("Starting soon", ui.discovery.startingSoon, onOpenHall)
-            Section("My halls", ui.discovery.myHalls, onOpenHall)
-            Spacer(Modifier.height(24.dp))
+            items(rooms, key = { it.hall.id }) { card ->
+                HallRoomRow(card, onClick = { onOpenHall(card) })
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+            }
         }
-        if (showCodeDialog) {
-            AlertDialog(
-                onDismissRequest = { showCodeDialog = false },
-                title = { Text("Open by code") },
-                text = {
-                    OutlinedTextField(
-                        value = code,
-                        onValueChange = { code = it },
-                        label = { Text("Share code") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showCodeDialog = false
-                            onJoinCode(code)
-                        }
-                    ) { Text("Open") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCodeDialog = false }) { Text("Cancel") }
+    }
+
+    if (showCodeDialog) {
+        AlertDialog(
+            onDismissRequest = { showCodeDialog = false },
+            title = { Text("Join with code", style = MaterialTheme.typography.headlineSmall) },
+            text = {
+                SanghaField(
+                    value = code,
+                    onValueChange = { code = it },
+                    label = "Share code"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCodeDialog = false
+                        onJoinCode(code.trim())
+                    }
+                ) { Text("Open", color = MaterialTheme.colorScheme.primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCodeDialog = false }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
                 }
-            )
-        }
-        FloatingActionButton(
-            onClick = onCreate,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 20.dp, bottom = 20.dp),
-            shape = CircleShape,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = "Create hall")
-        }
-    }
-}
-
-@Composable
-private fun Section(title: String, cards: List<HallCard>, onOpen: (String) -> Unit) {
-    Spacer(Modifier.height(24.dp))
-    Text(
-        text = title.uppercase(),
-        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp, fontSize = 12.sp),
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
-    )
-    Spacer(Modifier.height(10.dp))
-    if (cards.isEmpty()) {
-        Text(
-            "None right now.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
+            },
+            containerColor = MaterialTheme.colorScheme.background
         )
-    } else {
-        cards.distinctBy { it.hall.id }.forEach { card ->
-            HallCardRow(card, onOpen)
-            Spacer(Modifier.height(10.dp))
+    }
+}
+
+private fun frequencyLabel(card: HallCard): String {
+    val schedule = card.schedule
+    return when (schedule.scheduleType) {
+        ScheduleType.ONCE -> "Once"
+        ScheduleType.DAILY -> "Daily"
+        ScheduleType.WEEKLY -> "Weekly"
+        ScheduleType.WEEKDAYS -> "Weekdays"
+        ScheduleType.CUSTOM -> {
+            val days = schedule.daysOfWeek.sortedBy { it.value }
+            if (days.isEmpty()) "Custom" else days.joinToString(", ") { it.shortName() }
         }
     }
 }
 
+private fun DayOfWeek.shortName(): String =
+    name.lowercase().replaceFirstChar { it.titlecase() }.take(3)
+
 @Composable
-private fun HallCardRow(card: HallCard, onOpen: (String) -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+private fun HallRoomRow(card: HallCard, onClick: () -> Unit) {
     val localStart = Instant.ofEpochMilli(card.nextStartMillis).atZone(ZoneId.systemDefault())
-    val time = localStart.format(DateTimeFormatter.ofPattern("EEE")) + " " +
+    val whenLabel = localStart.format(DateTimeFormatter.ofPattern("EEE")) + " " +
         localStart.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
-    val subtitle = if (card.remainingSeconds != null) {
-        val m = card.remainingSeconds / 60
-        "${card.participantCount} sitting · ${m}m remaining"
+    val sitting = card.remainingSeconds != null
+    val frequency = frequencyLabel(card)
+    val detail = if (sitting) {
+        val minutes = (card.remainingSeconds / 60).coerceAtLeast(0)
+        "$whenLabel · $frequency · ${card.participantCount} sitting · ${minutes}m left"
     } else {
-        "${card.participantCount} expected · $time"
+        "$whenLabel · $frequency · ${card.participantCount} expected"
     }
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), shape)
-            .clickable { onOpen(card.hall.id) }
-            .padding(16.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(card.hall.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-        Spacer(Modifier.height(4.dp))
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.weight(1f)) {
+            Text(
+                card.hall.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                if (card.joined) "Joined" else "Not joined",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (card.joined) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
+                }
+            )
+            if (sitting) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    "Now",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
     }
 }

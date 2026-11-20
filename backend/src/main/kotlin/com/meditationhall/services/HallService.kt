@@ -152,6 +152,12 @@ class HallService {
                     body.audioUrl?.let { u -> it[Halls.audioUrl] = u.trim().takeIf { s -> s.isNotBlank() } }
                     body.audioFileName?.let { n -> it[Halls.audioFileName] = n.trim().takeIf { s -> s.isNotBlank() } }
                     body.audioDurationSeconds?.let { d -> it[Halls.audioDurationSeconds] = d.takeIf { s -> s > 0 } }
+                } else if (audioType == "BELL") {
+                    it[Halls.audioUrl] = null
+                    it[Halls.audioDurationSeconds] = null
+                    val gong = body.audioFileName?.trim()?.takeIf { id -> id in setOf("dhamma", "classic", "temple") }
+                        ?: "dhamma"
+                    it[Halls.audioFileName] = gong
                 } else if (audioType != null) {
                     it[Halls.audioUrl] = null
                     it[Halls.audioFileName] = null

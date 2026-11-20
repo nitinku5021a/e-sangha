@@ -6,10 +6,25 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 
 class TokenStore(context: Context) {
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
-        "sangha_auth",
+    private val prefs: SharedPreferences = open(context.applicationContext)
+
+    private fun open(app: Context): SharedPreferences {
+        try {
+            return encrypted(app)
+        } catch (_: Exception) {
+            app.deleteSharedPreferences(NAME)
+        }
+        return try {
+            encrypted(app)
+        } catch (_: Exception) {
+            app.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+        }
+    }
+
+    private fun encrypted(app: Context): SharedPreferences = EncryptedSharedPreferences.create(
+        NAME,
         MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
-        context.applicationContext,
+        app,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
@@ -46,6 +61,7 @@ class TokenStore(context: Context) {
     }
 
     companion object {
+        private const val NAME = "sangha_auth"
         private const val KEY_ACCESS = "access"
         private const val KEY_REFRESH = "refresh"
         private const val KEY_USER = "user"

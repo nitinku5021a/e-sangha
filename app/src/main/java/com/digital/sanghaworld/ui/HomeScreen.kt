@@ -15,14 +15,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -68,27 +64,22 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = SanghaScreenPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Vipassana",
-            style = MaterialTheme.typography.displayLarge.copy(fontSize = 42.sp),
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = "SILENCE  ·  INSIGHT",
-            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 3.sp),
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-            modifier = Modifier.padding(top = 8.dp, bottom = 36.dp)
+            text = "Choose a duration. Settle, then begin.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(bottom = 24.dp)
         )
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             items(durations) { option ->
@@ -116,25 +107,12 @@ fun CustomDurationDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = "Custom sit", style = MaterialTheme.typography.headlineSmall) },
         text = {
-            Column {
-                Text(
-                    text = "Minutes (1–240)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                TextField(
-                    value = text,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) text = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedIndicatorColor = MaterialTheme.colorScheme.primary
-                    )
-                )
-            }
+            SanghaField(
+                value = text,
+                onValueChange = { if (it.all { char -> char.isDigit() }) text = it },
+                label = "Minutes (1–240)",
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
         },
         confirmButton = {
             TextButton(
@@ -161,13 +139,12 @@ fun CustomDurationDialog(
 
 @Composable
 fun TimerOptionCard(value: String, unit: String, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(28.dp)
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(shape)
+            .clip(SanghaCardShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f), shape)
+            .border(1.dp, MaterialTheme.colorScheme.outline, SanghaCardShape)
             .clickable(onClick = onClick)
             .padding(16.dp),
         contentAlignment = Alignment.Center
@@ -175,16 +152,15 @@ fun TimerOptionCard(value: String, unit: String, onClick: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = value,
-                style = MaterialTheme.typography.displaySmall.copy(fontSize = 36.sp),
+                style = MaterialTheme.typography.displaySmall.copy(fontSize = 34.sp),
                 color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Normal,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = unit.uppercase(),
-                style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp, letterSpacing = 1.6.sp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center
             )
         }

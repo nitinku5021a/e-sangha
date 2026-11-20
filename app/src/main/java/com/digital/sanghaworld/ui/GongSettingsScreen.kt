@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.audio.GongCatalog
 import com.digital.sanghaworld.audio.GongPreferences
 import com.digital.sanghaworld.audio.GongPreviewPlayer
@@ -48,13 +46,11 @@ fun GongSettingsScreen(modifier: Modifier = Modifier) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = SanghaScreenPadding)
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Used for start and interval. At the end of a sit it plays three times, 3 seconds apart.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+        Spacer(modifier = Modifier.height(4.dp))
+        ScreenIntro(
+            subtitle = "Used at the start and at intervals. At the end of a sit it plays three times, three seconds apart."
         )
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -81,20 +77,23 @@ private fun GongSoundRow(
     onSelect: () -> Unit,
     onPreview: () -> Unit
 ) {
-    val shape = RoundedCornerShape(20.dp)
-    val borderAlpha = if (selected) 0.55f else 0.16f
+    val borderColor = if (selected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+    } else {
+        MaterialTheme.colorScheme.outline
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
+            .clip(SanghaCardShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = borderAlpha), shape)
+            .border(1.dp, borderColor, SanghaCardShape)
             .clickable(onClick = onSelect)
             .padding(horizontal = 18.dp, vertical = 16.dp)
     ) {
         Text(
             text = sound.title,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleMedium,
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(4.dp))
@@ -111,7 +110,7 @@ private fun GongSoundRow(
         ) {
             Text(
                 text = if (selected) "SELECTED" else "TAP TO USE",
-                style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = if (selected) 0.9f else 0.45f)
             )
             QuietButton(text = "Play", onClick = onPreview)

@@ -25,7 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CropFree
 import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.VolumeOff
@@ -39,21 +39,27 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.hall.MeditationSeat
+import com.digital.sanghaworld.ui.theme.ForestSoft
+import com.digital.sanghaworld.ui.theme.HallCream
+import com.digital.sanghaworld.ui.theme.Ink
 
-private val Forest = Color(0xFF2F5D4A)
-private val Cream = Color(0xFFF7F1E6)
-private val Ink = Color(0xFF2A241C)
+private val Forest = ForestSoft
+private val Cream = HallCream
 
 @Composable
 fun MeditationHallScreen(
@@ -61,6 +67,7 @@ fun MeditationHallScreen(
     seats: List<MeditationSeat>,
     joined: Boolean,
     timeLeftMillis: Long? = null,
+    startsAtMillis: Long? = null,
     muted: Boolean,
     focusMode: Boolean,
     onJoin: () -> Unit,
@@ -88,6 +95,15 @@ fun MeditationHallScreen(
         }
     }
     var moreOpen by remember { mutableStateOf(false) }
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(startsAtMillis, joined) {
+        while (joined && startsAtMillis != null && startsAtMillis > System.currentTimeMillis()) {
+            nowMillis = System.currentTimeMillis()
+            delay(1000)
+        }
+        nowMillis = System.currentTimeMillis()
+    }
+    val untilStart = if (joined && startsAtMillis != null) startsAtMillis - nowMillis else 0L
 
     Column(
         modifier
@@ -98,7 +114,7 @@ fun MeditationHallScreen(
     ) {
         if (!focusMode) {
             HallHeader(
-                subtitle = hallName.ifBlank { "Together in Silence" },
+                hallName = hallName.ifBlank { "Meditation hall" },
                 occupied = occupied,
                 moreOpen = moreOpen,
                 onBack = onBack,
@@ -110,6 +126,32 @@ fun MeditationHallScreen(
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             HallArchitecture(Modifier.fillMaxSize())
+            if (timeLeftMillis != null && timeLeftMillis > 0) {
+                Text(
+                    formatClock(timeLeftMillis),
+                    color = Ink,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Cream.copy(alpha = 0.92f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+            if (untilStart > 0) {
+                Text(
+                    "Meditation starts in ${formatLead(untilStart)}",
+                    color = Ink,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 24.dp, vertical = 20.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Cream.copy(alpha = 0.94f))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val pw = maxWidth
                 val ph = maxHeight
@@ -129,6 +171,17 @@ fun MeditationHallScreen(
 
         if (focusMode) {
             Text(
+                hallName.ifBlank { "Meditation hall" },
+                color = Ink,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+            )
+            Text(
                 "Leave Focus",
                 color = Forest,
                 modifier = Modifier
@@ -147,12 +200,11 @@ fun MeditationHallScreen(
             Spacer(Modifier.height(16.dp))
         } else {
             SittingControls(
-                timeLeftMillis = timeLeftMillis,
                 muted = muted,
                 onLeave = onLeaveMeditation,
                 onMute = onToggleMute,
                 onFocus = onToggleFocus,
-                onMore = { moreOpen = true }
+                onDetails = onMoreDetails
             )
         }
     }
@@ -160,7 +212,7 @@ fun MeditationHallScreen(
 
 @Composable
 private fun HallHeader(
-    subtitle: String,
+    hallName: String,
     occupied: Int,
     moreOpen: Boolean,
     onBack: () -> Unit,
@@ -179,14 +231,12 @@ private fun HallHeader(
         }
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "Meditation Hall",
-                style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
-                color = Ink
-            )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = Forest
+                hallName,
+                style = MaterialTheme.typography.titleLarge,
+                color = Ink,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -223,20 +273,34 @@ private fun JoinButton(onJoin: () -> Unit) {
     }
 }
 
+private fun formatClock(millis: Long): String {
+    val totalSec = (millis / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s)
+}
+
+private fun formatLead(millis: Long): String {
+    val totalSec = (millis / 1000).coerceAtLeast(0)
+    val minutes = totalSec / 60
+    val seconds = totalSec % 60
+    return when {
+        minutes > 0 && seconds > 0 -> "$minutes min $seconds sec"
+        minutes > 0 -> if (minutes == 1L) "1 minute" else "$minutes minutes"
+        seconds == 1L -> "1 second"
+        else -> "$seconds seconds"
+    }
+}
+
 @Composable
 private fun SittingControls(
-    timeLeftMillis: Long?,
     muted: Boolean,
     onLeave: () -> Unit,
     onMute: () -> Unit,
     onFocus: () -> Unit,
-    onMore: () -> Unit
+    onDetails: () -> Unit
 ) {
-    val time = timeLeftMillis?.let {
-        val m = (it / 1000) / 60
-        val s = (it / 1000) % 60
-        String.format("%d:%02d", m, s)
-    }
     Column(
         Modifier
             .fillMaxWidth()
@@ -244,7 +308,7 @@ private fun SittingControls(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            if (time != null) "You are meditating  ·  $time" else "You are meditating",
+            "You are meditating",
             color = Forest,
             style = MaterialTheme.typography.bodySmall
         )
@@ -252,7 +316,7 @@ private fun SittingControls(
             MiniAction("Leave", Icons.Outlined.SelfImprovement, onLeave)
             MiniAction(if (muted) "Unmute" else "Mute", if (muted) Icons.Outlined.VolumeOff else Icons.Outlined.VolumeUp, onMute)
             MiniAction("Focus", Icons.Outlined.CropFree, onFocus)
-            MiniAction("More", Icons.Outlined.MoreHoriz, onMore)
+            MiniAction("Details", Icons.Outlined.Info, onDetails)
         }
     }
 }

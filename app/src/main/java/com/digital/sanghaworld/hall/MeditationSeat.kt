@@ -30,8 +30,6 @@ object HallSeatLayout {
     )
     val emptyCushion = R.drawable.seat_empty
     val youLook = MeditatorLook(R.drawable.sitter_01)
-    private val mockNames = listOf("Asha", "Dev", "Maya", "Arun", "Leela", "Sam", "Nira", "Omar")
-
     fun lookFor(seed: Int): MeditatorLook {
         val i = seed.and(0x7fffffff)
         return MeditatorLook(sitters[i % sitters.size])
@@ -79,7 +77,6 @@ object HallSeatLayout {
         liveOthers.forEachIndexed { i, p ->
             if (i < frontIds.size) liveBySeat[frontIds[i]] = p
         }
-        var mockIndex = 0
         return layout.map { seat ->
             when {
                 userJoined && assignedSeatId == seat.id -> seat.copy(
@@ -107,13 +104,11 @@ object HallSeatLayout {
                             isCurrentUser = false
                         )
                     } else {
-                        val name = mockNames[mockIndex % mockNames.size]
-                        mockIndex++
                         seat.copy(
-                            occupied = true,
-                            participantId = "mock-$name-${seat.id}",
-                            label = name,
-                            look = lookFor(seat.id * 17 + 3),
+                            occupied = false,
+                            participantId = null,
+                            label = null,
+                            look = null,
                             isCurrentUser = false
                         )
                     }

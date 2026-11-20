@@ -1,7 +1,6 @@
 package com.digital.sanghaworld.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
@@ -29,8 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.digital.sanghaworld.logging.DailyTotal
 import java.time.LocalDate
@@ -43,7 +39,6 @@ fun CalendarLogScreen(
     modifier: Modifier = Modifier
 ) {
     val dateFormatter = DateTimeFormatter.ofPattern("EEE  ·  MMM d")
-    val shape = RoundedCornerShape(20.dp)
     var pendingDelete by remember { mutableStateOf<DailyTotal?>(null) }
 
     pendingDelete?.let { item ->
@@ -62,7 +57,7 @@ fun CalendarLogScreen(
                         pendingDelete = null
                     }
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.primary)
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -78,25 +73,16 @@ fun CalendarLogScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = SanghaScreenPadding)
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Sits recorded by day",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-        )
+        Spacer(modifier = Modifier.height(4.dp))
+        ScreenIntro(subtitle = "Sits recorded on this device, by day.")
         Spacer(modifier = Modifier.height(20.dp))
 
         if (logs.isEmpty()) {
-            Text(
-                text = "No sessions yet.\nWhen you sit, the time will appear here.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 48.dp)
+            EmptyState(
+                title = "No sessions yet",
+                body = "When you sit, the time will appear here."
             )
         } else {
             LazyColumn(
@@ -104,39 +90,37 @@ fun CalendarLogScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(logs, key = { it.date.toString() }) { item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface, shape)
-                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), shape)
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                    SanghaCard {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.date.format(dateFormatter),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (item.sessionCount == 1) "1 sit" else "${item.sessionCount} sits",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
                             Text(
-                                text = item.date.format(dateFormatter),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = formatDuration(item.totalMillis),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 4.dp)
                             )
-                            Text(
-                                text = if (item.sessionCount == 1) "1 sit" else "${item.sessionCount} sits",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
-                        Text(
-                            text = formatDuration(item.totalMillis),
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        IconButton(onClick = { pendingDelete = item }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Delete",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                            )
+                            IconButton(onClick = { pendingDelete = item }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                )
+                            }
                         }
                     }
                 }

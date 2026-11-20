@@ -68,6 +68,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 if (useRemote) remoteUi() else toUi(store.load())
             }
             _state.value = ui
+            SittingAlarms.reschedule(getApplication(), ui.discovery.sittingNow + ui.discovery.startingSoon + ui.discovery.myHalls)
         }
     }
 
@@ -169,35 +170,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openHall(hallId: String) {
-        viewModelScope.launch {
-            val ui = withContext(Dispatchers.IO) {
-                connectRemote()
-                if (useRemote) remoteUi(hallId) else {
-                    val s = store.load()
-                    val disc = store.discovery(s)
-                    val card = (disc.sittingNow + disc.startingSoon + disc.myHalls).firstOrNull { it.hall.id == hallId }
-                        ?: return@withContext _state.value
-                    val stats = hallStats(s, hallId)
-                    _state.value.copy(
-                        discovery = disc,
-                        selectedHall = card.hall,
-                        selectedSchedule = card.schedule,
-                        selectedJoined = card.joined,
-                        selectedParticipantCount = card.participantCount,
-                        selectedNextStart = card.nextStartMillis,
-                        selectedRemaining = card.remainingSeconds,
-                        stats = stats,
-                        logs = s.logs,
-                        supporter = s.supporter,
-                        supportRequests = s.supportRequests,
-                        relationships = s.relationships,
-                        profile = s.profile
-                    )
-                }
-            }
-            _state.value = ui
-            prepareHallScene()
-        }
+        viewModelScope.launch { loadHall(hallId) }
     }
 
     fun joinHall(hallId: String) {
@@ -242,7 +215,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         audioUrl: String? = null,
         audioFileName: String? = null,
         audioDurationSeconds: Int? = null,
-        onCreated: (String?) -> Unit = {}
+        onCreated: (String?, Boolean) -> Unit = { _, _ -> }
     ) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -264,9 +237,53 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             val id = result.getOrNull()
-            if (id != null) openHall(id)
-            onCreated(id)
+            if (id != null) loadHall(id)
+            val selected = _state.value
+            val showHall = id != null && canEnterHall(
+                selected.selectedNextStart,
+                selected.selectedHall?.durationSeconds ?: 0
+            )
+            onCreated(id, showHall)
         }
+    }
+
+    private suspend fun loadHall(hallId: String) {
+        val ui = withContext(Dispatchers.IO) {
+            connectRemote()
+            if (useRemote) remoteUi(hallId) else {
+                val s = store.load()
+                val disc = store.discovery(s)
+                val card = (disc.sittingNow + disc.startingSoon + disc.myHalls).firstOrNull { it.hall.id == hallId }
+                    ?: return@withContext _state.value
+                val stats = hallStats(s, hallId)
+                _state.value.copy(
+                    discovery = disc,
+                    selectedHall = card.hall,
+                    selectedSchedule = card.schedule,
+                    selectedJoined = card.joined,
+                    selectedParticipantCount = card.participantCount,
+                    selectedNextStart = card.nextStartMillis,
+                    selectedRemaining = card.remainingSeconds,
+                    stats = stats,
+                    logs = s.logs,
+                    supporter = s.supporter,
+                    supportRequests = s.supportRequests,
+                    relationships = s.relationships,
+                    profile = s.profile
+                )
+            }
+        }
+        _state.value = ui
+        prepareHallScene()
+        SittingAlarms.reschedule(getApplication(), ui.discovery.sittingNow + ui.discovery.startingSoon + ui.discovery.myHalls)
+    }
+
+    private fun canEnterHall(startMillis: Long, durationSeconds: Int): Boolean {
+        if (startMillis <= 0) return false
+        val now = System.currentTimeMillis()
+        val until = startMillis - now
+        val end = startMillis + durationSeconds * 1000L
+        return until in 1..(15 * 60 * 1000L) || (now >= startMillis && now < end)
     }
 
     private fun createHallLocal(
@@ -356,7 +373,11 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                                         visibility = visibility,
                                         audioType = audioType,
                                         audioUrl = if (audioType == AudioType.FILE) audioUrl else null,
-                                        audioFileName = if (audioType == AudioType.FILE) audioFileName else null,
+                                        audioFileName = when (audioType) {
+                                            AudioType.FILE -> audioFileName
+                                            AudioType.BELL -> audioFileName?.takeIf { it in setOf("dhamma", "classic", "temple") } ?: "dhamma"
+                                            else -> null
+                                        },
                                         audioDurationSeconds = if (audioType == AudioType.FILE) audioDurationSeconds else null,
                                         timezone = ZoneId.systemDefault().id
                                     )
@@ -696,7 +717,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             days = emptySet(),
             visibility = HallVisibility.PRIVATE,
             audioType = AudioType.BELL,
-            onCreated = onCreated
+            onCreated = { id, _ -> onCreated(id) }
         )
     }
 
@@ -733,6 +754,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             seats = _state.value.seats,
             meditating = _state.value.meditating
         )
+        val disc = _state.value.discovery
+        SittingAlarms.reschedule(getApplication(), disc.sittingNow + disc.startingSoon + disc.myHalls)
     }
 
     private fun toUi(s: HallState): HallUiState {

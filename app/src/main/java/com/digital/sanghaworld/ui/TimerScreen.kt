@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import com.digital.sanghaworld.hall.DisplayMode
 import com.digital.sanghaworld.hall.ParticipantPresence
 import androidx.compose.foundation.layout.aspectRatio
@@ -16,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,15 +49,15 @@ fun TimerScreen(
     ) {
         Text(
             text = hallName ?: if (isInPrep) "SETTLING" else "SITTING",
-            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 4.sp),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp),
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
         )
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         if (isInPrep) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.78f)
+                    .fillMaxWidth(0.72f)
                     .aspectRatio(1f)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surface),
@@ -66,14 +65,14 @@ fun TimerScreen(
             ) {
                 Text(
                     text = "Starting in…",
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
         } else {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.82f)
+                    .fillMaxWidth(0.78f)
                     .aspectRatio(1f),
                 contentAlignment = Alignment.Center
             ) {
@@ -81,18 +80,18 @@ fun TimerScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         Text(
             text = timeFormatted,
-            style = MaterialTheme.typography.displayLarge.copy(fontSize = 56.sp, letterSpacing = 2.sp),
+            style = MaterialTheme.typography.displayLarge.copy(fontSize = 52.sp, letterSpacing = 1.5.sp),
             color = MaterialTheme.colorScheme.primary
         )
 
         if (hallName != null) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "$sittingCount sitting",
+                text = if (sittingCount == 1) "1 sitting" else "$sittingCount sitting",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
             )
@@ -104,23 +103,11 @@ fun TimerScreen(
             ) {
                 participants.filter { it.displayMode != DisplayMode.HIDDEN }.forEach { p ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = p.label.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "·",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        InitialAvatar(p.label, size = 48.dp)
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = p.label,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.4.sp),
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
                     }
@@ -128,7 +115,7 @@ fun TimerScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         QuietButton(text = "End session", onClick = onStop)
     }

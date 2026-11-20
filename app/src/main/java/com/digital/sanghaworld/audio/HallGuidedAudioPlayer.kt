@@ -80,6 +80,21 @@ object HallGuidedAudioPlayer {
         }
     }
 
+    fun positionMs(): Int = runCatching { player?.currentPosition ?: 0 }.getOrDefault(0)
+
+    fun durationMs(): Int = runCatching { player?.duration?.takeIf { it > 0 } ?: 0 }.getOrDefault(0)
+
+    fun seekTo(positionMs: Int) {
+        val mp = player ?: return
+        val duration = runCatching { mp.duration }.getOrDefault(0)
+        val target = if (duration > 0) positionMs.coerceIn(0, duration) else positionMs.coerceAtLeast(0)
+        runCatching { mp.seekTo(target) }
+    }
+
+    fun skipForward(byMs: Int = 15_000) {
+        seekTo(positionMs() + byMs)
+    }
+
     fun setMuted(value: Boolean) {
         muted = value
         player?.let { applyVolume(it) }

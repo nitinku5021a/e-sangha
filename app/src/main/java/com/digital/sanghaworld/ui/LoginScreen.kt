@@ -28,31 +28,35 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(32.dp),
+            .padding(horizontal = 32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Sangha World",
-            style = MaterialTheme.typography.displaySmall.copy(fontSize = 34.sp),
-            color = MaterialTheme.colorScheme.primary,
+            text = "Meditation Sangha",
+            style = MaterialTheme.typography.displaySmall,
+            color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
         Text(
             text = "SIT  ·  TOGETHER",
-            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 3.sp),
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-            modifier = Modifier.padding(top = 8.dp, bottom = 36.dp)
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.42f),
+            modifier = Modifier.padding(top = 10.dp, bottom = 28.dp)
         )
         Text(
-            text = "Sign in to join meditation halls. Your account stays on our server; Google only proves it is you.",
+            text = "Sign in to join meditation halls. Google only confirms who you are — your practice stays here.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.62f),
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(32.dp))
         if (state.loading) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 2.dp,
+                modifier = Modifier.padding(12.dp)
+            )
         } else {
             QuietButton(
                 text = "Continue with Google",
@@ -63,12 +67,7 @@ fun LoginScreen(
         }
         if (!state.error.isNullOrBlank()) {
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = state.error,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center
-            )
+            StatusText(state.error, error = true)
         }
     }
 }

@@ -16,31 +16,39 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = VipassanaGold,
-    secondary = VipassanaGoldDark,
+    primary = WarmGold,
+    secondary = WarmGoldDeep,
+    tertiary = Forest,
     background = DarkBackground,
     surface = DarkSurface,
     surfaceVariant = Color(0xFF2C271F),
     onPrimary = Ink,
     onSecondary = TextLight,
+    onTertiary = TextLight,
     onBackground = TextLight,
     onSurface = TextLight,
     onSurfaceVariant = TextLightMuted,
-    outline = Color(0xFF4A4338)
+    outline = Color(0xFF4A4338),
+    error = ErrorWarm,
+    onError = TextLight
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = VipassanaGold,
-    secondary = VipassanaGoldDark,
+    primary = WarmGold,
+    secondary = WarmGoldDeep,
+    tertiary = Forest,
     background = Parchment,
     surface = CreamSurface,
-    surfaceVariant = Color(0xFFE4D8C0),
+    surfaceVariant = Color(0xFFE2D6C2),
     onPrimary = Ink,
     onSecondary = Ink,
+    onTertiary = Color.White,
     onBackground = Ink,
     onSurface = Ink,
     onSurfaceVariant = InkMuted,
-    outline = Color(0xFFD4C6A8)
+    outline = Color(0xFFD3C5AA),
+    error = ErrorWarm,
+    onError = Color.White
 )
 
 @Composable
