@@ -5,6 +5,7 @@ import com.meditationhall.db.DatabaseFactory
 import com.meditationhall.realtime.RealtimeHub
 import com.meditationhall.routes.apiRoutes
 import com.meditationhall.scheduler.SessionScheduler
+import com.meditationhall.services.CommunityService
 import com.meditationhall.services.HallService
 import com.meditationhall.services.SessionService
 import com.meditationhall.services.SupportService
