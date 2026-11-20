@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
@@ -26,7 +27,9 @@ import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -68,6 +71,7 @@ import com.digital.sanghaworld.ui.LoginScreen
 import com.digital.sanghaworld.ui.TimerScreen
 import com.digital.sanghaworld.ui.hall.CommunitySupportScreen
 import com.digital.sanghaworld.ui.hall.CommunityRoomScreen
+import com.digital.sanghaworld.ui.hall.CommunitySittingScreen
 import com.digital.sanghaworld.ui.hall.CreateHallScreen
 import com.digital.sanghaworld.ui.hall.HallDetailScreen
 import com.digital.sanghaworld.ui.hall.HallLogScreen
@@ -158,6 +162,8 @@ fun VipassanaApp(
     var hallPage by remember { mutableStateOf("home") }
     var communityMinutes by remember { mutableStateOf(30) }
     var communityGong by remember { mutableStateOf("dhamma") }
+    var askCommunityExit by remember { mutableStateOf(false) }
+    var askQuitApp by remember { mutableStateOf(false) }
     var detailsFromRoom by remember { mutableStateOf(false) }
     var hallMuted by remember { mutableStateOf(false) }
     var hallFocus by remember { mutableStateOf(false) }
@@ -192,7 +198,7 @@ fun VipassanaApp(
         while (true) {
             if (hallUi.meditating) hallViewModel.beatCommunity()
             hallViewModel.refreshCommunity()
-            delay(10_000)
+            delay(3_000)
         }
     }
     LaunchedEffect(hallUi.meditating, isRunning, showHalls, hallPage) {
@@ -261,13 +267,11 @@ fun VipassanaApp(
     }
 
     val onNestedScreen = showAwareness || showSupport || showSettings || (showHalls && hallPage != "home")
-    BackHandler(enabled = isRunning || isAwarenessRunning || hasCompleted || onNestedScreen) {
+    val onMainScreen = !isRunning && !isAwarenessRunning && !hasCompleted && !onNestedScreen
+    BackHandler(enabled = isRunning || isAwarenessRunning || hasCompleted || onNestedScreen || onMainScreen) {
         when {
-            isRunning && hallPage == "community" -> {
-                hallViewModel.leaveCommunity()
-                endSit()
-                hallPage = "home"
-            }
+            onMainScreen -> askQuitApp = true
+            hallPage == "community" -> askCommunityExit = true
             isRunning && hallPage == "info" -> hallPage = "detail"
             isRunning -> endSit()
             isAwarenessRunning -> viewModel.stopAwareness(context)
@@ -288,6 +292,50 @@ fun VipassanaApp(
         }
     }
 
+    if (askQuitApp) {
+        AlertDialog(
+            onDismissRequest = { askQuitApp = false },
+            title = { Text("Quit the app?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    askQuitApp = false
+                    (context as Activity).finish()
+                }) { Text("Quit") }
+            },
+            dismissButton = {
+                TextButton(onClick = { askQuitApp = false }) { Text("Stay") }
+            }
+        )
+    }
+
+    if (askCommunityExit) {
+        AlertDialog(
+            onDismissRequest = { askCommunityExit = false },
+            title = { Text("Leave the Community Room?") },
+            text = { Text("You can stay, leave the room, or quit the app. Your sit ends if you leave or quit.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    askCommunityExit = false
+                    hallViewModel.leaveCommunity()
+                    if (isRunning) endSit()
+                    hallFocus = false
+                    hallPage = "home"
+                }) { Text("Leave room") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        askCommunityExit = false
+                        hallViewModel.leaveCommunity()
+                        if (isRunning) endSit()
+                        (context as Activity).finish()
+                    }) { Text("Quit app") }
+                    TextButton(onClick = { askCommunityExit = false }) { Text("Stay") }
+                }
+            }
+        )
+    }
+
     if (isRunning) {
         LaunchedEffect(hallViewModel.activeSessionId, isRunning) {
             while (isRunning && hallViewModel.activeSessionId != null) {
@@ -297,29 +345,11 @@ fun VipassanaApp(
         }
         val stopSit = { endSit() }
         if (hallPage == "community") {
-            HallSittingScreen(
-                hallName = "Community Room",
-                timeLeft = timeLeft,
-                seats = hallUi.seats,
-                joined = true,
-                muted = hallMuted,
-                focusMode = hallFocus,
-                onJoin = {},
-                onLeave = {
-                    hallViewModel.leaveCommunity()
-                    hallFocus = false
-                    endSit()
-                    hallPage = "home"
-                },
-                onToggleMute = { hallMuted = !hallMuted },
-                onToggleFocus = { hallFocus = !hallFocus },
-                onMoreDetails = {},
-                onBack = {
-                    hallViewModel.leaveCommunity()
-                    hallFocus = false
-                    endSit()
-                    hallPage = "home"
-                }
+            CommunitySittingScreen(
+                timeLeftMillis = timeLeft,
+                people = hallUi.sittingParticipants,
+                currentUserId = hallUi.profile?.id,
+                onLeave = { askCommunityExit = true }
             )
         } else if (hallPage == "info") {
             HallDetailScreen(

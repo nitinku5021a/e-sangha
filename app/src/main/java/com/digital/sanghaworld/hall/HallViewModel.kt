@@ -165,10 +165,19 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun applyCommunity(remote: List<Pair<String, String>>) {
         val me = _state.value.profile
-        val people = remote.map { (id, name) ->
+        val incoming = remote.map { (id, name) ->
             ParticipantPresence(id, name.ifBlank { "Someone" }, DisplayMode.AVATAR)
-        }.toMutableList()
-        if (_state.value.meditating && me != null && people.none { it.userId == me.id }) {
+        }.distinctBy { it.userId.lowercase() }
+        val incomingById = incoming.associateBy { it.userId.lowercase() }
+        val previous = _state.value.sittingParticipants
+        val kept = previous.mapNotNull { incomingById[it.userId.lowercase()] }
+        val keptIds = kept.map { it.userId.lowercase() }.toSet()
+        val people = (kept + incoming.filter { it.userId.lowercase() !in keptIds }).toMutableList()
+        val listed = me != null && people.any {
+            it.userId.equals(me.id, ignoreCase = true) ||
+                it.label.equals(me.displayName, ignoreCase = true)
+        }
+        if (_state.value.meditating && me != null && !listed && remote.isEmpty()) {
             people += ParticipantPresence(me.id, me.displayName.ifBlank { "You" }, DisplayMode.AVATAR)
         }
         _state.value = _state.value.copy(

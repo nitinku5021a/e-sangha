@@ -216,12 +216,15 @@ class TimerService : Service() {
         _completionDuration.value = 0L
         _timeLeftInMillis.value = 0
         stopForeground(STOP_FOREGROUND_REMOVE)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(NOTIFICATION_ID)
         releaseWakeLock()
         cancelEndGongs()
         stopRunnable?.let { mainHandler.removeCallbacks(it) }
         stopRunnable = null
         mediaPlayer?.release()
         mediaPlayer = null
+        if (!_isAwarenessRunning.value) stopSelf()
     }
 
     private fun startAwarenessInternal(durationMillis: Long, intervalMillis: Long) {
