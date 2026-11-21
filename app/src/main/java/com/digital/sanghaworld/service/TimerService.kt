@@ -76,6 +76,7 @@ class TimerService : Service() {
         const val ACTION_STOP = "com.digital.sanghaworld.STOP"
         const val EXTRA_DURATION = "com.digital.sanghaworld.DURATION"
         const val EXTRA_SKIP_PREP = "com.digital.sanghaworld.SKIP_PREP"
+        const val EXTRA_SKIP_START_GONG = "com.digital.sanghaworld.SKIP_START_GONG"
         const val EXTRA_OPEN_TIMER = "com.digital.sanghaworld.OPEN_TIMER"
         const val ACTION_START_AWARENESS = "com.digital.sanghaworld.START_AWARENESS"
         const val ACTION_STOP_AWARENESS = "com.digital.sanghaworld.STOP_AWARENESS"
@@ -107,8 +108,9 @@ class TimerService : Service() {
             ACTION_START -> {
                 val duration = intent.getLongExtra(EXTRA_DURATION, 0L)
                 val skipPrep = intent.getBooleanExtra(EXTRA_SKIP_PREP, false)
+                val skipStartGong = intent.getBooleanExtra(EXTRA_SKIP_START_GONG, false)
                 if (duration > 0) {
-                    startTimerInternal(duration, skipPrep)
+                    startTimerInternal(duration, skipPrep, skipStartGong)
                 }
             }
             ACTION_STOP -> stopTimer()
@@ -124,7 +126,7 @@ class TimerService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startTimerInternal(durationMillis: Long, skipPrep: Boolean = false) {
+    private fun startTimerInternal(durationMillis: Long, skipPrep: Boolean = false, skipStartGong: Boolean = false) {
         if (_isTimerRunning.value) return
         hasPlayedPreEndDong = false
         hasLoggedSession = false
@@ -143,7 +145,7 @@ class TimerService : Service() {
         _isTimerRunning.value = true
         _totalDurationInMillis.value = durationMillis
         if (skipPrep) {
-            beginMainTimer(durationMillis)
+            beginMainTimer(durationMillis, playStartGong = !skipStartGong)
             return
         }
         prepTimer = object : CountDownTimer(PREP_TIME_MILLIS, 1000) {
@@ -153,14 +155,14 @@ class TimerService : Service() {
             }
 
             override fun onFinish() {
-                beginMainTimer(durationMillis)
+                beginMainTimer(durationMillis, playStartGong = !skipStartGong)
             }
         }.start()
     }
 
-    private fun beginMainTimer(durationMillis: Long) {
+    private fun beginMainTimer(durationMillis: Long, playStartGong: Boolean = true) {
         _isInPrep.value = false
-        playSelectedGong()
+        if (playStartGong) playSelectedGong()
         timer = object : CountDownTimer(durationMillis, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 _timeLeftInMillis.value = millisUntilFinished

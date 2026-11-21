@@ -26,6 +26,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -261,9 +263,11 @@ fun SanghaField(
     modifier: Modifier = Modifier,
     supporting: String? = null,
     singleLine: Boolean = true,
+    placeholder: String? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     enabled: Boolean = true,
-    trailing: @Composable (() -> Unit)? = null
+    trailing: @Composable (() -> Unit)? = null,
+    focusRequester: FocusRequester? = null
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -277,6 +281,14 @@ fun SanghaField(
             onValueChange = onValueChange,
             keyboardOptions = keyboardOptions,
             singleLine = singleLine,
+            placeholder = placeholder?.let { hint ->
+                {
+                    Text(
+                        hint,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            },
             enabled = enabled,
             trailingIcon = trailing,
             shape = SanghaFieldShape,
@@ -292,6 +304,7 @@ fun SanghaField(
             modifier = Modifier
                 .fillMaxWidth()
                 .border(1.dp, MaterialTheme.colorScheme.outline, SanghaFieldShape)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
         )
         if (!supporting.isNullOrBlank()) {
             Text(

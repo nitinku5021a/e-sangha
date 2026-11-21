@@ -62,7 +62,7 @@ fun CommunityRoomScreen(
 ) {
     var customOpen by remember { mutableStateOf(minutes !in presets) }
     var customText by remember { mutableStateOf(if (minutes !in presets) minutes.toString() else "") }
-    val customMinutes = customText.toIntOrNull()?.takeIf { it in 1..240 }
+    val customMinutes = customText.toIntOrNull()?.takeIf { it in 1..999 }
     Column(
         modifier
             .fillMaxSize()
@@ -166,11 +166,11 @@ fun CommunityRoomScreen(
                             value = customText,
                             onValueChange = { raw ->
                                 customText = raw.filter { it.isDigit() }.take(3)
-                                customText.toIntOrNull()?.takeIf { it in 1..240 }?.let(onMinutes)
+                                customText.toIntOrNull()?.takeIf { it in 1..999 }?.let(onMinutes)
                             },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            placeholder = { Text("1–240", color = ChipText, fontSize = 14.sp) },
+                            placeholder = { Text("1–999", color = ChipText, fontSize = 14.sp) },
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Chip,
                                 unfocusedContainerColor = Chip,

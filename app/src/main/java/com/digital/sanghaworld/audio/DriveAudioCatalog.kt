@@ -31,6 +31,17 @@ object DriveAudioCatalog {
     fun confirmPlaybackUrl(fileId: String): String =
         "https://drive.google.com/uc?export=download&confirm=t&id=$fileId"
 
+    /**
+     * A URL MediaPlayer can stream. The uc export link often returns an HTML
+     * warning page, which the player treats as a failed file.
+     */
+    fun mediaUrl(sourceUrl: String): String {
+        val url = sourceUrl.trim()
+        if (url.isBlank() || !isGoogleDrive(url)) return url
+        val fileId = extractFileId(url) ?: return url
+        return "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
+    }
+
     fun listAudio(sourceUrl: String): List<DriveAudioFile> {
         val url = sourceUrl.trim()
         if (url.isBlank()) return emptyList()

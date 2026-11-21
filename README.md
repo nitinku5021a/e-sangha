@@ -29,7 +29,7 @@ Launcher name: **Meditation Sangha**.
 - **Gong settings** — Dhamma (default), Classic, Temple. Preview and persist the chosen sound (`app/src/main/res/raw/`).
 - **Be Aware Always** — reminder gongs over a chosen span of hours at a chosen interval.
 - **Meditation log** — completed sits stored on-device as `meditation_log.json`, daily totals and sit count, calendar view, delete a day.
-- **Donate** — optional Google Play Billing donations (`donation_unit`). No paywall.
+- **Donate** — optional Google Play Billing donations (`group_donation_unit_1x`, `group_donation_unit_10x`, `group_donation_unit_100x`). No paywall.
 
 ### Tech
 

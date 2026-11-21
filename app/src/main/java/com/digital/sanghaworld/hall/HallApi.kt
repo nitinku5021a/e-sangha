@@ -14,7 +14,7 @@ import java.time.ZoneId
 
 class HallApi(
     private val tokens: TokenStore,
-    private val baseUrl: String = BuildConfig.API_BASE_URL.ifBlank { DEFAULT_BASE }
+    private val baseUrl: String = httpsBase(BuildConfig.API_BASE_URL.ifBlank { DEFAULT_BASE })
 ) {
     fun isConfigured(): Boolean = tokens.isSignedIn()
 
@@ -43,6 +43,11 @@ class HallApi(
         }.getOrDefault(false)
     }
 
+    fun deleteAccount() {
+        request("DELETE", "/v1/me")
+        tokens.clear()
+    }
+
     fun logout() {
         val refresh = tokens.refreshToken
         runCatching {
@@ -54,6 +59,27 @@ class HallApi(
     }
 
     fun me(): JSONObject = request("GET", "/v1/me")
+
+    fun updateDisplayName(name: String) {
+        request(
+            "PATCH",
+            "/v1/me",
+            JSONObject()
+                .put("displayName", name)
+                .put("timezone", java.time.ZoneId.systemDefault().id)
+        )
+    }
+
+    fun syncTimezone() {
+        val name = tokens.displayName?.trim().orEmpty()
+        request(
+            "PATCH",
+            "/v1/me",
+            JSONObject()
+                .put("displayName", name)
+                .put("timezone", java.time.ZoneId.systemDefault().id)
+        )
+    }
 
     private fun saveTokens(res: JSONObject) {
         tokens.save(
@@ -95,7 +121,8 @@ class HallApi(
         audioType: AudioType,
         audioUrl: String? = null,
         audioFileName: String? = null,
-        audioDurationSeconds: Int? = null
+        audioDurationSeconds: Int? = null,
+        startDate: String? = null
     ): String {
         val body = JSONObject()
             .put("name", name)
@@ -111,6 +138,7 @@ class HallApi(
             .put("audioUrl", audioUrl ?: JSONObject.NULL)
             .put("audioFileName", audioFileName ?: JSONObject.NULL)
             .put("audioDurationSeconds", audioDurationSeconds ?: JSONObject.NULL)
+            .put("startDate", startDate ?: JSONObject.NULL)
         return request("POST", "/v1/halls", body).getString("id")
     }
 
@@ -127,7 +155,8 @@ class HallApi(
         audioType: AudioType,
         audioUrl: String? = null,
         audioFileName: String? = null,
-        audioDurationSeconds: Int? = null
+        audioDurationSeconds: Int? = null,
+        startDate: String? = null
     ) {
         val body = JSONObject()
             .put("name", name)
@@ -143,6 +172,7 @@ class HallApi(
             .put("audioUrl", audioUrl ?: JSONObject.NULL)
             .put("audioFileName", audioFileName ?: JSONObject.NULL)
             .put("audioDurationSeconds", audioDurationSeconds ?: JSONObject.NULL)
+            .put("startDate", startDate ?: JSONObject.NULL)
         request("POST", "/v1/halls/$id", body)
     }
 
@@ -407,5 +437,14 @@ class HallApi(
 
     companion object {
         const val DEFAULT_BASE = "http://10.0.2.2:8080"
+
+        fun httpsBase(raw: String): String {
+            val url = raw.trim().trimEnd('/')
+            val local = url.contains("://10.0.2.2") ||
+                url.contains("://127.0.0.1") ||
+                url.contains("://localhost")
+            if (!local && url.startsWith("http://")) return "https://" + url.removePrefix("http://")
+            return url
+        }
     }
 }

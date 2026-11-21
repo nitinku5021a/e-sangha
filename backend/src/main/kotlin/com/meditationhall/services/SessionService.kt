@@ -147,7 +147,9 @@ class SessionService(private val hub: RealtimeHub) {
                 it[MeditationLogs.sessionId] = sessionId
                 it[hallId] = hall[Halls.id]
                 it[hallName] = hall[Halls.name]
-                it[date] = Instant.now().atZone(ZoneOffset.UTC).toLocalDate().toString()
+                val userZone = Users.selectAll().firstOrNull { it[Users.id] == userId }?.get(Users.timezone)
+                val zone = runCatching { java.time.ZoneId.of(userZone ?: "UTC") }.getOrDefault(java.time.ZoneOffset.UTC)
+                it[date] = Instant.now().atZone(zone).toLocalDate().toString()
                 it[durationSeconds] = seconds
                 it[completionStatus] = status
                 it[createdAt] = now()

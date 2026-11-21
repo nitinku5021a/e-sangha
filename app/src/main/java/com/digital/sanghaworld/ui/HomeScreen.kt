@@ -110,7 +110,7 @@ fun CustomDurationDialog(
             SanghaField(
                 value = text,
                 onValueChange = { if (it.all { char -> char.isDigit() }) text = it },
-                label = "Minutes (1–240)",
+                label = "Minutes (1–999)",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
         },
@@ -118,7 +118,7 @@ fun CustomDurationDialog(
             TextButton(
                 onClick = {
                     val minutes = text.toLongOrNull()
-                    if (minutes != null && minutes in 1..240) {
+                    if (minutes != null && minutes in 1..999) {
                         onConfirm(minutes)
                     }
                 }

@@ -1,0 +1,99 @@
+Sangha: Group Meditation
+A quiet place to sit with other people, or on your own.
+
+This is an independent app. It is not an official product of any Vipassana center, organization, or teacher.
+
+You sign in with Google. Your name in the halls is the name you choose in My Practice. You can change it later, and that name is what other people see beside your seat.
+
+
+HOW A SITTING WORKS
+
+You pick a length and enter a hall. The phone keeps the time even if the screen is off. A notification shows that a sit is in progress.
+
+The sound you chose in settings marks the start. For a longer sit, the same sound marks the time near the end, then plays three times when the sit is finished. Open Meditation Hall and a scheduled hall both use that one sound, so you do not hear a second bell on top of it.
+
+You can leave when you need to. The time you actually sat is what counts toward your practice.
+
+
+OPEN MEDITATION HALL
+
+This hall is always available. There is no schedule.
+
+Choose 30, 45, 60, 90, or 120 minutes, or tap + and type your own length. A custom sit can be anywhere from 1 to 999 minutes.
+
+When you sit, you see the other people who are sitting at the same time. Your chosen name is on your seat. When you leave, you leave the room.
+
+
+SCHEDULED HALLS
+
+A scheduled hall is a room with a time, a length, and a way of repeating.
+
+You can create a hall, name it, describe it, set how long the sitting is, and choose when it starts. It can happen once, every day, on weekdays, weekly, or on days you pick. You choose who can find it, and you get a share code so someone else can join.
+
+People can come in from 15 minutes before the start and take a seat. The sitting itself begins at the scheduled time. If you made the hall, you can edit it or delete it.
+
+Each hall has its own audio:
+
+- None, if the room should stay quiet apart from the sitting bell
+- A bell, chosen from the sounds in the app
+- A recording, such as a talk stored on Google Drive
+
+On the hall page you can preview that audio before you sit. For a long recording you can drag through it and jump ahead 15 seconds. The hall page also shows the next sitting, how the hall repeats, how many people are expected, and a short record of past sittings in that room.
+
+
+MY PRACTICE
+
+My Practice is your own record.
+
+It shows how long you sat today, this week, and this month. A calendar for the current week marks the days you sat. Recent sittings list the day, the hall, and the minutes.
+
+The record follows your account, so it is still there after you sign out and sign back in. Sits that exist only on this phone are included too. A day is counted once.
+
+
+ALSO IN THE APP
+
+Be aware always. Set a stretch of hours and how often a quiet sound should ring. It is a reminder to come back while you are walking, working, or resting. You can end it whenever you like.
+
+Join with a code. If someone sends you a hall code, you can enter it and join that room.
+
+Support. The app is free. There is no paywall. If you want to, you can make a voluntary donation through Google Play.
+
+Gong. In settings you pick the sound used to begin and end a sit, and you can hear it before you keep it.
+
+
+WHAT IT DOES NOT DO
+
+There is no chat, no feed, and no comments in the hall. People sit together. They do not talk in the app.
+
+There are no ads.
+
+The app does not claim to teach a method, and it does not replace a teacher or a meditation center.
+
+
+PLAY STORE
+
+Short description (under 80 characters):
+
+Sit together in silence. Open hall, scheduled halls, and your practice log.
+
+Full description: use the sections above, from the first line through "WHAT IT DOES NOT DO". That text is under the Play Store limit of 4,000 characters.
+
+Suggested category: Health & Fitness.
+Suggested tags: Meditation, Wellness, Mindfulness.
+
+
+REDDIT
+
+I have been building a small Android app called Sangha: Group Meditation. It is for sitting quietly with other people, not for chatting.
+
+There is an Open Meditation Hall you can enter any time. You pick 30, 45, 60, 90, or 120 minutes, or any length under 1,000 minutes, and you sit with whoever else is there. Your name shows on your seat.
+
+There are also scheduled halls. Someone creates a room, sets the time and how often it repeats, and shares a code. People can take a seat from 15 minutes before the start. A hall can be silent, use a bell, or play a recording (including one kept on Google Drive). You can preview that audio on the hall page and move through it.
+
+My Practice shows today, this week, and this month, a simple week calendar, and recent sittings. It stays with your account when you sign out and come back.
+
+There is also a gentle "be aware" reminder you can run through the day, and the start and end of a sit use one sound that you choose.
+
+It is free, with an optional donation. No ads and no social feed. It is not an official app of any meditation organization.
+
+Happy to hear what would make a group sit feel calmer.

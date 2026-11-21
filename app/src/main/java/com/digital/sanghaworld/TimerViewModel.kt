@@ -120,11 +120,17 @@ class TimerViewModel : ViewModel() {
         }
     }
 
-    fun startTimer(context: Context, durationMillis: Long, skipPrep: Boolean = false) {
+    fun startTimer(
+        context: Context,
+        durationMillis: Long,
+        skipPrep: Boolean = false,
+        skipStartGong: Boolean = false
+    ) {
         val intent = Intent(context, TimerService::class.java).apply {
             action = TimerService.ACTION_START
             putExtra(TimerService.EXTRA_DURATION, durationMillis)
             putExtra(TimerService.EXTRA_SKIP_PREP, skipPrep)
+            putExtra(TimerService.EXTRA_SKIP_START_GONG, skipStartGong)
         }
         // Ensure service is started/promoted to foreground
         context.startForegroundService(intent)

@@ -64,6 +64,16 @@ fun Route.apiRoutes(
             val user = auth.requireUser(call.request.header("Authorization"))
             call.respond(auth.me(user))
         }
+        patch("/me") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            val body = call.receive<AuthRequest>()
+            call.respond(auth.updateDisplayName(user, body.displayName, body.timezone))
+        }
+        delete("/me") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            auth.deleteAccount(user)
+            call.respond(HttpStatusCode.NoContent)
+        }
         get("/time") {
             call.respond(TimeResponse(System.currentTimeMillis()))
         }

@@ -22,12 +22,16 @@ class GongPreviewPlayer(private val context: Context) {
             return
         }
         player = created.apply {
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .build()
-            )
+            // MediaPlayer.create already prepares the clip. Setting attributes after that
+            // throws and start() never runs, so the preview stays silent.
+            runCatching {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
+            }
             setOnCompletionListener {
                 stop()
                 onComplete?.invoke()

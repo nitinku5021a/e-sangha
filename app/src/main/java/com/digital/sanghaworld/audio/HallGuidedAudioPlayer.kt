@@ -1,17 +1,27 @@
 package com.digital.sanghaworld.audio
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.MediaPlayer
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import java.net.CookieHandler
+import java.net.CookieManager
 
 object HallGuidedAudioPlayer {
-    private var player: MediaPlayer? = null
+    private var player: ExoPlayer? = null
     private val main = Handler(Looper.getMainLooper())
     private var stopTask: Runnable? = null
     private var muted = false
+    private var pendingSeekMs = 0L
+    private var triedFallback = false
 
     fun start(
         context: Context,
@@ -22,73 +32,99 @@ object HallGuidedAudioPlayer {
     ) {
         stop()
         muted = startMuted
+        triedFallback = false
+        pendingSeekMs = startPositionMs.coerceAtLeast(0)
         if (url.isBlank() || playForMs <= 0) return
+        if (CookieHandler.getDefault() == null) {
+            CookieHandler.setDefault(CookieManager())
+        }
         val app = context.applicationContext
-        val mp = MediaPlayer()
-        player = mp
-        try {
-            mp.setWakeMode(app, PowerManager.PARTIAL_WAKE_LOCK)
-            mp.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .build()
-            )
-            mp.setDataSource(url)
-            mp.setOnPreparedListener { prepared ->
-                if (player !== prepared) {
-                    prepared.release()
-                    return@setOnPreparedListener
+        val audioManager = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager.requestAudioFocus(
+            null,
+            AudioManager.STREAM_MUSIC,
+            AudioManager.AUDIOFOCUS_GAIN
+        )
+        val exo = ExoPlayer.Builder(app).build()
+        player = exo
+        exo.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .setUsage(C.USAGE_MEDIA)
+                .build(),
+            false
+        )
+        exo.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (player !== exo || playbackState != Player.STATE_READY) return
+                if (pendingSeekMs > 0) {
+                    exo.seekTo(pendingSeekMs)
+                    pendingSeekMs = 0
                 }
-                val duration = prepared.duration.toLong().coerceAtLeast(0)
-                val seek = startPositionMs.coerceAtLeast(0)
-                if (duration > 0 && seek >= duration) {
+                val duration = exo.duration
+                val seek = exo.currentPosition.coerceAtLeast(0)
+                if (duration > 0 && duration != C.TIME_UNSET && seek >= duration) {
                     stop()
-                    return@setOnPreparedListener
+                    return
                 }
-                if (seek > 0) {
-                    runCatching { prepared.seekTo(seek.toInt()) }
+                val remainingAudio = if (duration > 0 && duration != C.TIME_UNSET) {
+                    (duration - seek).coerceAtLeast(0)
+                } else {
+                    playForMs
                 }
-                applyVolume(prepared)
-                prepared.start()
-                val remainingAudio = if (duration > 0) (duration - seek).coerceAtLeast(0) else playForMs
-                val stopAfter = minOf(playForMs, remainingAudio)
+                stopTask?.let { main.removeCallbacks(it) }
                 val task = Runnable { stop() }
                 stopTask = task
-                main.postDelayed(task, stopAfter)
+                main.postDelayed(task, minOf(playForMs, remainingAudio))
             }
-            mp.setOnCompletionListener { stop() }
-            mp.setOnErrorListener { _, _, _ ->
-                val alt = DriveAudioCatalog.confirmPlaybackUrl(
-                    Regex("id=([a-zA-Z0-9_-]+)").find(url)?.groupValues?.getOrNull(1).orEmpty()
-                )
-                if (alt.isNotBlank() && alt != url && player === mp) {
-                    runCatching {
-                        mp.reset()
-                        mp.setDataSource(alt)
-                        mp.prepareAsync()
-                    }
-                    true
-                } else {
+
+            override fun onPlayerError(error: PlaybackException) {
+                if (player !== exo || triedFallback) {
                     stop()
-                    true
+                    return
                 }
+                val fileId = Regex("id=([a-zA-Z0-9_-]+)").find(url)?.groupValues?.getOrNull(1).orEmpty()
+                val alt = DriveAudioCatalog.confirmPlaybackUrl(fileId)
+                if (fileId.isBlank() || alt.isBlank()) {
+                    stop()
+                    return
+                }
+                triedFallback = true
+                open(exo, alt, playWhenReady = true)
             }
-            mp.prepareAsync()
-        } catch (_: Exception) {
-            stop()
-        }
+        })
+        applyVolume(exo)
+        open(exo, DriveAudioCatalog.mediaUrl(url), playWhenReady = true)
     }
 
-    fun positionMs(): Int = runCatching { player?.currentPosition ?: 0 }.getOrDefault(0)
+    private fun open(exo: ExoPlayer, url: String, playWhenReady: Boolean) {
+        val dataSource = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Linux; Android) eSangha")
+            .setAllowCrossProtocolRedirects(true)
+        val source = ProgressiveMediaSource.Factory(dataSource)
+            .createMediaSource(MediaItem.fromUri(url))
+        exo.setMediaSource(source)
+        exo.prepare()
+        exo.playWhenReady = playWhenReady
+    }
 
-    fun durationMs(): Int = runCatching { player?.duration?.takeIf { it > 0 } ?: 0 }.getOrDefault(0)
+    fun positionMs(): Int = runCatching {
+        player?.currentPosition?.takeIf { it >= 0 }?.toInt() ?: 0
+    }.getOrDefault(0)
+
+    fun durationMs(): Int = runCatching {
+        val duration = player?.duration ?: return 0
+        if (duration <= 0 || duration == C.TIME_UNSET) 0 else duration.toInt()
+    }.getOrDefault(0)
 
     fun seekTo(positionMs: Int) {
-        val mp = player ?: return
-        val duration = runCatching { mp.duration }.getOrDefault(0)
-        val target = if (duration > 0) positionMs.coerceIn(0, duration) else positionMs.coerceAtLeast(0)
-        runCatching { mp.seekTo(target) }
+        val target = positionMs.coerceAtLeast(0).toLong()
+        pendingSeekMs = target
+        val exo = player ?: return
+        val duration = exo.duration
+        val clamped = if (duration > 0 && duration != C.TIME_UNSET) target.coerceIn(0, duration) else target
+        pendingSeekMs = 0
+        runCatching { exo.seekTo(clamped) }
     }
 
     fun skipForward(byMs: Int = 15_000) {
@@ -103,16 +139,16 @@ object HallGuidedAudioPlayer {
     fun stop() {
         stopTask?.let { main.removeCallbacks(it) }
         stopTask = null
+        pendingSeekMs = 0
         val current = player
         player = null
         if (current != null) {
-            runCatching { if (current.isPlaying) current.stop() }
+            runCatching { current.stop() }
             runCatching { current.release() }
         }
     }
 
-    private fun applyVolume(mp: MediaPlayer) {
-        val v = if (muted) 0f else 1f
-        runCatching { mp.setVolume(v, v) }
+    private fun applyVolume(exo: ExoPlayer) {
+        runCatching { exo.volume = if (muted) 0f else 1f }
     }
 }

@@ -1,0 +1,49 @@
+Privacy policy for Meditation Sangha
+Package name: com.digital.meditationsangha
+Last updated: 21 November 2026
+
+This policy describes the Android app Meditation Sangha and the server that supports shared meditation halls.
+
+What the app is
+The app is a meditation timer and a way to sit with other people in a scheduled hall. It is free. Donations are optional and are processed by Google Play.
+
+Account and sign-in
+You can use the timer without an account. A Google account is required to join or create a hall.
+When you sign in, the app receives a Google ID token and sends it to our server. We store:
+- your display name
+- the email address on that Google account
+- a Google account identifier
+- your time zone
+- sign-in session tokens on your device and on the server
+
+We do not receive your Google password.
+
+Halls and practice
+If you create or join a hall, we store the hall name, description, schedule, time zone, audio link you provide, membership, and sitting attendance (date, duration, and whether the sitting was complete).
+A practice log is also kept on your device. Hall sittings may be stored on the server so My Practice can show them after you sign in.
+We do not collect photographs, contacts, location, or microphone recordings. Audio you choose is streamed from a link you supply, such as a Google Drive link. We store that link, not the audio file.
+
+Donations
+Donations use Google Play Billing. Google processes the payment. We do not receive your card number or billing address. We learn only that a Play purchase completed.
+
+What we do not do
+We do not sell personal information. We do not show ads. We do not use the data for advertising. We do not share your account with other hall members beyond the display name shown in a shared sitting.
+
+How long we keep it
+Account, hall, and attendance data stay until you delete the account, or until you leave or delete a hall you created. Session tokens expire or are removed when you sign out.
+
+Delete your account
+In the app, open My Space and tap Delete account. This removes your account, session tokens, hall memberships, attendance, and halls you created from our server. It also signs you out. A practice log stored only on the phone can be removed by uninstalling the app or clearing the app's storage.
+If you cannot open the app, email the developer address shown on the Google Play listing for Meditation Sangha and ask for account deletion. Include the email address of the Google account you used to sign in. We delete that account from the server.
+
+Security
+Account data is sent to the server over HTTPS. Keep your device locked. Sign out on a shared device.
+
+Children
+The app is not directed at children under 13.
+
+Changes
+If this policy changes, the updated text will replace this page and the date above will change.
+
+Contact
+Use the developer email address published on the Google Play store listing for Meditation Sangha.

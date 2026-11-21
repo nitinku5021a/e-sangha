@@ -39,6 +39,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             val signedIn = withContext(Dispatchers.IO) { restore() }
+            if (signedIn) {
+                withContext(Dispatchers.IO) { runCatching { api.syncTimezone() } }
+            }
             _state.value = AuthUiState(ready = true, signedIn = signedIn, displayName = tokens.displayName)
         }
     }
@@ -63,6 +66,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching { api.loginWithGoogle(idToken) }
             }
             val ok = login.getOrDefault(false)
+            if (ok) {
+                withContext(Dispatchers.IO) { runCatching { api.syncTimezone() } }
+            }
             val loginError = login.exceptionOrNull()?.message
             _state.value = AuthUiState(
                 ready = true,
@@ -85,6 +91,21 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteAccount(onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(loading = true, error = null)
+            val result = withContext(Dispatchers.IO) { runCatching { api.deleteAccount() } }
+            val ok = result.isSuccess
+            _state.value = AuthUiState(
+                ready = true,
+                signedIn = !ok,
+                displayName = if (ok) null else tokens.displayName,
+                error = if (ok) null else result.exceptionOrNull()?.message ?: "Could not delete the account."
+            )
+            onDone(ok)
+        }
+    }
+
     fun clearError() {
         _state.value = _state.value.copy(error = null)
     }
@@ -94,6 +115,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         if (trimmed.isBlank()) return
         tokens.displayName = trimmed
         _state.value = _state.value.copy(displayName = trimmed)
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { api.updateDisplayName(trimmed) }
+        }
     }
 
     private fun restore(): Boolean {

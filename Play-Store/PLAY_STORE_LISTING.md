@@ -12,10 +12,10 @@ Package name: `com.digital.meditationsangha` (new listing; not Vipassana Timerâ€
 File: `title.txt`
 
 ```
-Meditation Sangha
+Sangha: Group Meditation
 ```
 
-(17 characters)
+(25 characters)
 
 ---
 
@@ -60,7 +60,7 @@ Use after you upload a new AAB. Bump `versionCode` in `app/build.gradle.kts` if 
 | Website | Optional |
 | Privacy policy URL | Required if you collect any data; still recommended. State that the sit log stays on the device and donations go through Google Play. |
 | Contains ads | No |
-| In-app products | Yes (voluntary donations: `donation_unit`) |
+| In-app products | Yes (voluntary donations: `group_donation_unit_1x`, `group_donation_unit_10x`, `group_donation_unit_100x`) |
 | Target audience | 18+ is safest; content is not for children |
 | News app | No |
 | COVID-19 contact tracing | No |

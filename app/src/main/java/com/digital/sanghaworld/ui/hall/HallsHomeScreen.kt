@@ -20,17 +20,9 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.hall.HallCard
 import com.digital.sanghaworld.hall.HallUiState
-import com.digital.sanghaworld.ui.SanghaField
 import com.digital.sanghaworld.ui.StatusText
 
 private val Page = Color(0xFFF4F1E8)
@@ -61,20 +52,8 @@ fun HallsHomeScreen(
     onOpenMenu: () -> Unit = {},
     onCreateHall: () -> Unit = {},
     onBrowseHalls: () -> Unit = {},
-    onJoinCode: (String) -> Unit,
-    openJoinCode: Boolean = false,
-    onJoinCodeConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showCodeDialog by remember { mutableStateOf(false) }
-    var code by remember { mutableStateOf("") }
-    LaunchedEffect(openJoinCode) {
-        if (openJoinCode) {
-            showCodeDialog = true
-            onJoinCodeConsumed()
-        }
-    }
-
     val scheduledCount = (ui.discovery.catalog.ifEmpty {
         ui.discovery.sittingNow + ui.discovery.startingSoon + ui.discovery.myHalls
     }).distinctBy { it.hall.id }.size
@@ -136,34 +115,6 @@ fun HallsHomeScreen(
             onCreate = onCreateHall
         )
         Spacer(Modifier.height(16.dp))
-    }
-
-    if (showCodeDialog) {
-        AlertDialog(
-            onDismissRequest = { showCodeDialog = false },
-            title = { Text("Join with code", style = MaterialTheme.typography.headlineSmall) },
-            text = {
-                SanghaField(
-                    value = code,
-                    onValueChange = { code = it },
-                    label = "Share code"
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showCodeDialog = false
-                        onJoinCode(code.trim())
-                    }
-                ) { Text("Open", color = MaterialTheme.colorScheme.primary) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCodeDialog = false }) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.background
-        )
     }
 }
 

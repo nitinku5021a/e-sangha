@@ -53,8 +53,10 @@ class CommunityService {
 
     fun heartbeat(userId: UUID) {
         transaction {
+            val name = Users.selectAll().firstOrNull { it[Users.id] == userId }?.get(Users.displayName)
             CommunityPresence.update({ CommunityPresence.userId eq userId }) {
                 it[lastSeenAt] = Instant.now()
+                if (!name.isNullOrBlank()) it[displayName] = name
             }
         }
     }

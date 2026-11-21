@@ -4,7 +4,19 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.exceptions.JWTVerificationException
 import com.meditationhall.ApiException
+import com.meditationhall.db.Attendance
+import com.meditationhall.db.CommunityPresence
+import com.meditationhall.db.HallMemberships
+import com.meditationhall.db.HallSchedules
+import com.meditationhall.db.Halls
+import com.meditationhall.db.MeditationLogs
+import com.meditationhall.db.MeditationSessions
+import com.meditationhall.db.Notifications
 import com.meditationhall.db.RefreshTokens
+import com.meditationhall.db.SupportRelationships
+import com.meditationhall.db.SupportRequests
+import com.meditationhall.db.SupporterProfiles
+import com.meditationhall.db.UserDevices
 import com.meditationhall.db.Users
 import com.meditationhall.db.now
 import com.meditationhall.db.uuid
@@ -19,7 +31,10 @@ import java.util.Base64
 import java.util.Date
 import java.util.UUID
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -45,7 +60,6 @@ class AuthService {
                     throw ApiException(HttpStatusCode.Forbidden, "ACCOUNT_${status}", "This account cannot sign in.")
                 }
                 Users.update({ Users.id eq existing[Users.id] }) {
-                    if (!identity.name.isNullOrBlank()) it[displayName] = identity.name.take(120)
                     if (!identity.email.isNullOrBlank()) it[email] = identity.email
                     it[updatedAt] = now()
                 }
@@ -111,6 +125,39 @@ class AuthService {
         issueTokens(userId, row[RefreshTokens.device])
     }
 
+    fun deleteAccount(userId: UUID) {
+        transaction {
+            val hallIds = Halls.selectAll().where { Halls.creatorId eq userId }.map { it[Halls.id] }
+            if (hallIds.isNotEmpty()) {
+                val sessionIds = MeditationSessions.selectAll()
+                    .where { MeditationSessions.hallId inList hallIds }
+                    .map { it[MeditationSessions.id] }
+                if (sessionIds.isNotEmpty()) {
+                    Attendance.deleteWhere { Attendance.sessionId inList sessionIds }
+                }
+                MeditationLogs.deleteWhere { MeditationLogs.hallId inList hallIds }
+                Attendance.deleteWhere { Attendance.hallId inList hallIds }
+                HallMemberships.deleteWhere { HallMemberships.hallId inList hallIds }
+                HallSchedules.deleteWhere { HallSchedules.hallId inList hallIds }
+                MeditationSessions.deleteWhere { MeditationSessions.hallId inList hallIds }
+                Halls.deleteWhere { Halls.id inList hallIds }
+            }
+            MeditationLogs.deleteWhere { MeditationLogs.userId eq userId }
+            Attendance.deleteWhere { Attendance.userId eq userId }
+            HallMemberships.deleteWhere { HallMemberships.userId eq userId }
+            SupportRequests.deleteWhere { SupportRequests.requesterId eq userId }
+            SupporterProfiles.deleteWhere { SupporterProfiles.userId eq userId }
+            SupportRelationships.deleteWhere {
+                (SupportRelationships.supporterId eq userId) or (SupportRelationships.supportedUserId eq userId)
+            }
+            CommunityPresence.deleteWhere { CommunityPresence.userId eq userId }
+            Notifications.deleteWhere { Notifications.userId eq userId }
+            UserDevices.deleteWhere { UserDevices.userId eq userId }
+            RefreshTokens.deleteWhere { RefreshTokens.userId eq userId }
+            Users.deleteWhere { Users.id eq userId }
+        }
+    }
+
     fun logout(refreshToken: String?) {
         if (refreshToken.isNullOrBlank()) return
         transaction {
@@ -135,6 +182,30 @@ class AuthService {
             throw ApiException(HttpStatusCode.Unauthorized, "UNAUTHENTICATED", "Invalid access token.")
         }
         return transaction { assertActive(userId) }
+    }
+
+    fun updateDisplayName(userId: UUID, displayName: String, timezone: String = ""): MeResponse = transaction {
+        val name = displayName.trim().take(120)
+        val zone = timezone.trim().take(64)
+        if (name.isBlank() && zone.isBlank()) {
+            throw ApiException(HttpStatusCode.BadRequest, "INVALID_PROFILE", "Nothing to update.")
+        }
+        if (zone.isNotBlank()) {
+            runCatching { java.time.ZoneId.of(zone) }.getOrElse {
+                throw ApiException(HttpStatusCode.BadRequest, "INVALID_TIMEZONE", "Unknown time zone.")
+            }
+        }
+        Users.update({ Users.id eq userId }) {
+            if (name.isNotBlank()) it[Users.displayName] = name
+            if (zone.isNotBlank()) it[Users.timezone] = zone
+            it[updatedAt] = now()
+        }
+        if (name.isNotBlank()) {
+            CommunityPresence.update({ CommunityPresence.userId eq userId }) {
+                it[CommunityPresence.displayName] = name
+            }
+        }
+        me(userId)
     }
 
     fun me(userId: UUID): MeResponse = transaction {

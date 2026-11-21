@@ -101,6 +101,14 @@ fun CommunitySupportScreen(
         }
         Spacer(Modifier.height(12.dp))
         QuietButton(text = "Back", onClick = onBack, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(16.dp))
+        SanghaCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "Support is not live yet. This feature will be available in a future update.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Spacer(Modifier.height(24.dp))
     }
 }

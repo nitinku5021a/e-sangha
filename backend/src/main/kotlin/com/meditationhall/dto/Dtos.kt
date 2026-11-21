@@ -3,7 +3,7 @@ package com.meditationhall.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class AuthRequest(val displayName: String = "You")
+data class AuthRequest(val displayName: String = "You", val timezone: String = "")
 
 @Serializable
 data class GoogleAuthRequest(val idToken: String, val device: String? = null)
@@ -57,7 +57,8 @@ data class CreateHallRequest(
     val timezone: String = "UTC",
     val audioUrl: String? = null,
     val audioFileName: String? = null,
-    val audioDurationSeconds: Int? = null
+    val audioDurationSeconds: Int? = null,
+    val startDate: String? = null
 )
 
 @Serializable
@@ -74,7 +75,8 @@ data class UpdateHallRequest(
     val timezone: String? = null,
     val audioUrl: String? = null,
     val audioFileName: String? = null,
-    val audioDurationSeconds: Int? = null
+    val audioDurationSeconds: Int? = null,
+    val startDate: String? = null
 )
 
 @Serializable

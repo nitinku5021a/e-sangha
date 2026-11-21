@@ -23,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.Constraints
@@ -54,8 +56,15 @@ fun HallDirectoryScreen(
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(searching) {
-        if (!searching) query = ""
+        if (!searching) {
+            query = ""
+        } else {
+            focusRequester.requestFocus()
+            keyboard?.show()
+        }
     }
     val unique = remember(halls) {
         halls.distinctBy { it.hall.id }
@@ -77,7 +86,8 @@ fun HallDirectoryScreen(
                 value = query,
                 onValueChange = { query = it },
                 label = "Search halls",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                focusRequester = focusRequester
             )
         }
         if (unique.isEmpty()) {

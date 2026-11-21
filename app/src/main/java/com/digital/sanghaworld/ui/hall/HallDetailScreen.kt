@@ -1,7 +1,10 @@
 package com.digital.sanghaworld.ui.hall
 
-import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,13 +12,37 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -24,9 +51,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.audio.GongCatalog
 import com.digital.sanghaworld.audio.GongPreviewPlayer
 import com.digital.sanghaworld.audio.HallGuidedAudioPlayer
@@ -35,14 +66,11 @@ import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.hall.CompletionStatus
 import com.digital.sanghaworld.hall.HallUiState
 import com.digital.sanghaworld.hall.ScheduleType
-import com.digital.sanghaworld.ui.MetaRow
-import com.digital.sanghaworld.ui.QuietButton
 import com.digital.sanghaworld.ui.SanghaScreenPadding
 import com.digital.sanghaworld.ui.StatusText
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import kotlinx.coroutines.delay
 
 private const val AudioPreviewMs = 3 * 60 * 60 * 1000L
@@ -70,8 +98,19 @@ fun HallDetailScreen(
     LaunchedEffect(previewing, hall.audioType) {
         while (previewing && hall.audioType == AudioType.FILE) {
             if (!scrubbing) positionMs = HallGuidedAudioPlayer.positionMs()
-            durationMs = HallGuidedAudioPlayer.durationMs()
+            val fromPlayer = HallGuidedAudioPlayer.durationMs()
+            val fromHall = (hall.audioDurationSeconds ?: 0) * 1000
+            durationMs = maxOf(fromPlayer, fromHall)
             delay(400)
+        }
+    }
+    val keepSliderDrag = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset = if (source == NestedScrollSource.Drag) available else Offset.Zero
         }
     }
     val filePreview = remember { mutableStateOf(false) }
@@ -94,12 +133,10 @@ fun HallDetailScreen(
     val inSession = startMillis > 0 && nowMillis >= startMillis && nowMillis < startMillis + durationMillis
     val arrivalWindow = untilStart in 1..(15 * 60 * 1000L)
     val canEnter = inSession || arrivalWindow
-    val zone = runCatching { ZoneId.of(ui.selectedSchedule?.timezone ?: hall.timezone) }
-        .getOrDefault(ZoneId.systemDefault())
+    val zone = ZoneId.systemDefault()
     val startLabel = if (startMillis > 0) {
-        val localStart = Instant.ofEpochMilli(startMillis).atZone(zone)
-        localStart.format(DateTimeFormatter.ofPattern("EEE d MMM")) + ", " +
-            localStart.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+        Instant.ofEpochMilli(startMillis).atZone(zone)
+            .format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a"))
     } else "Not scheduled"
     val audioLabel = when (hall.audioType) {
         AudioType.FILE -> hall.audioFileName?.takeIf { it.isNotBlank() } ?: "Recorded audio"
@@ -136,193 +173,364 @@ fun HallDetailScreen(
         }
     }
 
+    val statusText = when {
+        inSession -> "Sitting now"
+        untilStart in 1 until Long.MAX_VALUE -> "Starts in ${formatCountdown(untilStart)}"
+        else -> "Scheduled"
+    }
+    val expected = if (inSession && ui.sittingParticipants.isNotEmpty()) {
+        ui.sittingParticipants.size
+    } else {
+        ui.selectedParticipantCount
+    }
+    val hallLogs = ui.logs.filter { it.hallId == hall.id }.take(8)
+    val colors = MaterialTheme.colorScheme
+    val pill = RoundedCornerShape(28.dp)
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(colors.background)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = SanghaScreenPadding, vertical = 8.dp)
+            .padding(horizontal = SanghaScreenPadding, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(camelCaseHallName(hall.name), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            when {
-                inSession -> "Sitting now"
-                untilStart in 1 until Long.MAX_VALUE -> "Starts in ${formatCountdown(untilStart)}"
-                else -> "Scheduled"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        if (hall.description.isNotBlank()) {
-            Spacer(Modifier.height(12.dp))
+        Column(Modifier.padding(horizontal = 4.dp)) {
             Text(
-                hall.description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground
+                camelCaseHallName(hall.name),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Medium,
+                color = colors.onBackground
             )
-        }
-        if (canEnter && !inSession) {
             Spacer(Modifier.height(12.dp))
-            Text(
-                "The hall is open. You can take a seat. The sitting begins at the scheduled time.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
-
-        Spacer(Modifier.height(20.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-        MetaRow("Next sitting", startLabel)
-        MetaRow("Duration", "${hall.durationSeconds / 60} minutes")
-        MetaRow("Repeats", scheduleLabel(ui.selectedSchedule?.scheduleType))
-        MetaRow("Time zone", zone.id)
-        MetaRow("Visibility", hall.visibility.name.lowercase().replaceFirstChar { it.titlecase() })
-        MetaRow("Share code", hall.shareCode)
-        MetaRow(
-            if (inSession) "Sitting" else "Expected",
-            if (inSession && ui.sittingParticipants.isNotEmpty()) "${ui.sittingParticipants.size}"
-            else "${ui.selectedParticipantCount}"
-        )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+            Row(
+                modifier = Modifier
+                    .clip(pill)
+                    .background(colors.secondaryContainer)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.Schedule, null, tint = colors.onBackground, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(statusText, style = MaterialTheme.typography.titleSmall, color = colors.onBackground)
+            }
+            if (hall.description.isNotBlank()) {
+                Spacer(Modifier.height(14.dp))
                 Text(
-                    "Audio",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f)
-                )
-                Text(
-                    audioLabel + if (previewing) " · playing" else "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground
+                    hall.description,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = colors.onBackground
                 )
             }
-            if (canPreview) {
-                TextButton(onClick = { togglePreview() }) {
+            if (canEnter && !inSession) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "The hall is open. You can take a seat. The sitting begins at the scheduled time.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant
+                )
+            }
+        }
+
+        DetailCard {
+            SectionTitle(Icons.Outlined.CalendarMonth, "Schedule")
+            HorizontalDivider(color = colors.outline.copy(alpha = 0.7f), modifier = Modifier.padding(vertical = 12.dp))
+            Row(Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Fact(Icons.Outlined.PlayArrow, "Next sitting", startLabel)
+                    Fact(Icons.Outlined.Sync, "Repeats", scheduleLabel(ui.selectedSchedule?.scheduleType))
+                    Fact(Icons.Outlined.Schedule, "Duration", "${hall.durationSeconds / 60} minutes")
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Fact(Icons.Outlined.Public, "Time zone", zone.id.replace('_', ' '))
+                    Fact(
+                        Icons.Outlined.Visibility,
+                        "Visibility",
+                        hall.visibility.name.lowercase().replaceFirstChar { it.titlecase() }
+                    )
+                    Fact(Icons.Outlined.CheckCircle, if (inSession) "Sitting" else "Expected", "$expected")
+                }
+            }
+        }
+
+        DetailCard {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconBubble(Icons.Outlined.VolumeUp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Audio", style = MaterialTheme.typography.titleMedium, color = colors.onBackground)
                     Text(
-                        if (previewing) "Stop preview" else "Preview audio",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        audioLabel + if (previewing) " · playing" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant
                     )
                 }
-            }
-        }
-        if (previewing && hall.audioType == AudioType.FILE) {
-            Slider(
-                value = positionMs.toFloat(),
-                onValueChange = {
-                    scrubbing = true
-                    positionMs = it.toInt()
-                },
-                onValueChangeFinished = {
-                    HallGuidedAudioPlayer.seekTo(positionMs)
-                    scrubbing = false
-                },
-                valueRange = 0f..durationMs.coerceAtLeast(1).toFloat()
-            )
-            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(
-                    "${formatClockShort(positionMs)} / ${formatClockShort(durationMs)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = {
-                    HallGuidedAudioPlayer.skipForward()
-                    positionMs = HallGuidedAudioPlayer.positionMs()
-                }) { Text("Forward 15s") }
-            }
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Record",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary
-        )
-        MetaRow("Sessions", "${ui.stats.sessionCount}")
-        MetaRow("Attendance", "${ui.stats.totalAttendance}")
-        MetaRow("People", "${ui.stats.uniqueParticipants}")
-        MetaRow("Minutes sat", "${ui.stats.totalMeditationSeconds / 60}")
-        val hallLogs = ui.logs.filter { it.hallId == hall.id }.take(8)
-        if (hallLogs.isEmpty()) {
-            Text(
-                "Sittings in this hall will appear here.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-            )
-        } else {
-            hallLogs.forEach { log ->
-                val mark = when (log.completionStatus) {
-                    CompletionStatus.COMPLETED -> "Complete"
-                    CompletionStatus.PARTIAL -> "Partial"
-                    else -> "—"
+                if (canPreview) {
+                    Row(
+                        modifier = Modifier
+                            .clip(pill)
+                            .background(colors.primary)
+                            .clickable { togglePreview() }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.PlayArrow,
+                            null,
+                            tint = colors.onPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            if (previewing) "Stop" else "Preview",
+                            color = colors.onPrimary,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
                 }
-                MetaRow(
-                    log.date.format(DateTimeFormatter.ofPattern("d MMM")),
-                    "${log.durationSeconds / 60} min · $mark"
+            }
+            if (previewing && hall.audioType == AudioType.FILE) {
+                Slider(
+                    modifier = Modifier.nestedScroll(keepSliderDrag),
+                    value = positionMs.toFloat(),
+                    onValueChange = {
+                        scrubbing = true
+                        positionMs = it.toInt()
+                    },
+                    onValueChangeFinished = {
+                        HallGuidedAudioPlayer.seekTo(positionMs)
+                        scrubbing = false
+                    },
+                    valueRange = 0f..durationMs.coerceAtLeast(1).toFloat()
                 )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${formatClockShort(positionMs)} / ${formatClockShort(durationMs)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = {
+                        HallGuidedAudioPlayer.skipForward()
+                        positionMs = HallGuidedAudioPlayer.positionMs()
+                    }) { Text("Forward 15s") }
+                }
+            }
+        }
+
+        DetailCard {
+            SectionTitle(Icons.Outlined.BarChart, "Record")
+            Spacer(Modifier.height(14.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    StatCell(Icons.Outlined.Groups, "Sessions", "${ui.stats.sessionCount}", Modifier.weight(1f))
+                    StatDivider()
+                    StatCell(Icons.Outlined.CalendarMonth, "Attendance", "${ui.stats.totalAttendance}", Modifier.weight(1f))
+                }
+                HorizontalDivider(color = colors.outline.copy(alpha = 0.7f))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    StatCell(Icons.Outlined.Groups, "People", "${ui.stats.uniqueParticipants}", Modifier.weight(1f))
+                    StatDivider()
+                    StatCell(Icons.Outlined.Schedule, "Minutes sat", "${ui.stats.totalMeditationSeconds / 60}", Modifier.weight(1f))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            if (hallLogs.isEmpty()) {
+                Text(
+                    "Sittings in this hall will appear here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant
+                )
+            } else {
+                hallLogs.forEach { log ->
+                    val mark = when (log.completionStatus) {
+                        CompletionStatus.COMPLETED -> "Complete"
+                        CompletionStatus.PARTIAL -> "Partial"
+                        else -> "—"
+                    }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.secondaryContainer)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.CalendarMonth, null, tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            log.date.format(DateTimeFormatter.ofPattern("d MMM")),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onBackground,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "${log.durationSeconds / 60} min · $mark",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
 
         if (!ui.actionError.isNullOrBlank()) {
-            Spacer(Modifier.height(12.dp))
             StatusText(ui.actionError, error = true)
         }
-
-        Spacer(Modifier.height(20.dp))
         if (canEnter) {
-            QuietButton(
+            ActionButton(
                 text = if (inSession) "Enter sitting" else "Enter hall",
-                emphasized = true,
+                filled = true,
+                icon = Icons.Outlined.PlayArrow,
                 onClick = {
                     stopPreview()
                     onEnter()
-                },
-                modifier = Modifier.fillMaxWidth()
+                }
             )
-            Spacer(Modifier.height(8.dp))
         }
         if (ui.selectedJoined) {
-            QuietButton(text = "Leave hall", onClick = onLeave, modifier = Modifier.fillMaxWidth())
+            ActionButton(
+                text = "Leave Hall",
+                filled = !canEnter,
+                icon = Icons.Outlined.Logout,
+                onClick = onLeave
+            )
         } else {
-            QuietButton(
+            ActionButton(
                 text = "Join hall",
-                emphasized = !canEnter,
-                onClick = onJoin,
-                modifier = Modifier.fillMaxWidth()
+                filled = !canEnter,
+                icon = Icons.Outlined.CheckCircle,
+                onClick = onJoin
             )
         }
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-            TextButton(
-                onClick = {
-                    val send = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(
-                            Intent.EXTRA_TEXT,
-                            "Sit with me in ${camelCaseHallName(hall.name)}: https://meditation.app/h/${hall.shareCode}"
-                        )
-                    }
-                    context.startActivity(Intent.createChooser(send, "Share hall"))
-                }
-            ) { Text("Share") }
-            if (isCreator) {
-                TextButton(onClick = onEdit) { Text("Edit") }
-                TextButton(onClick = onDelete) { Text("Delete") }
-            }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = {
+        ActionButton(
+            text = "Close",
+            filled = false,
+            icon = Icons.Outlined.Close,
+            onClick = {
                 stopPreview()
                 onBack()
-            }) { Text("Close") }
+            }
+        )
+        if (isCreator) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ActionButton(text = "Edit", filled = false, modifier = Modifier.weight(1f), onClick = onEdit)
+                ActionButton(text = "Delete", filled = false, modifier = Modifier.weight(1f), onClick = onDelete)
+            }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun DetailCard(content: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun SectionTitle(icon: ImageVector, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+    }
+}
+
+@Composable
+private fun IconBubble(icon: ImageVector) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.secondaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun Fact(icon: ImageVector, label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconBubble(icon)
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
+        }
+    }
+}
+
+@Composable
+private fun StatCell(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.height(4.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp,
+            maxLines = 1,
+            softWrap = false
+        )
+        Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+    }
+}
+
+@Composable
+private fun StatDivider() {
+    VerticalDivider(
+        modifier = Modifier.height(48.dp),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+    )
+}
+
+@Composable
+private fun ActionButton(
+    text: String,
+    filled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null
+) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(28.dp)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (filled) colors.primary else colors.background)
+            .border(if (filled) 0.dp else 1.dp, colors.outline, shape)
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(
+                icon,
+                null,
+                tint = if (filled) colors.onPrimary else colors.onBackground,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.titleSmall,
+            color = if (filled) colors.onPrimary else colors.onBackground
+        )
     }
 }
 

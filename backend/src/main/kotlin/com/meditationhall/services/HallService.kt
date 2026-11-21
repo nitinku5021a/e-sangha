@@ -125,6 +125,7 @@ class HallService {
             it[startLocalTime] = "%02d:%02d".format(body.hour.coerceIn(0, 23), body.minute.coerceIn(0, 59))
             it[timezone] = body.timezone
             it[daysOfWeek] = body.daysOfWeek.joinToString(",")
+            it[startDate] = body.startDate?.takeIf { it.isNotBlank() }
             it[enabled] = true
         }
         HallMemberships.insert {
@@ -197,6 +198,7 @@ class HallService {
                     it[startLocalTime] = time
                     it[timezone] = body.timezone ?: row[Halls.timezone]
                     it[daysOfWeek] = body.daysOfWeek?.joinToString(",") ?: ""
+                    it[startDate] = body.startDate?.takeIf { it.isNotBlank() }
                     it[enabled] = true
                 }
             } else {
@@ -205,6 +207,7 @@ class HallService {
                     it[startLocalTime] = time
                     body.timezone?.let { tz -> it[timezone] = tz }
                     body.daysOfWeek?.let { days -> it[daysOfWeek] = days.joinToString(",") }
+                    body.startDate?.let { date -> it[startDate] = date.takeIf { d -> d.isNotBlank() } }
                 }
             }
         }

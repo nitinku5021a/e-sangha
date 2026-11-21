@@ -9,9 +9,7 @@ import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,7 +28,6 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.AlertDialog
@@ -76,7 +73,7 @@ import com.digital.sanghaworld.hall.ScheduleType
 import com.digital.sanghaworld.logging.MeditationLogStore
 import com.digital.sanghaworld.ui.LoginScreen
 import com.digital.sanghaworld.ui.MySpaceScreen
-import com.digital.sanghaworld.ui.ProfileStore
+import java.io.File
 import com.digital.sanghaworld.ui.TimerScreen
 import com.digital.sanghaworld.ui.hall.CommunitySupportScreen
 import com.digital.sanghaworld.ui.hall.CommunityRoomScreen
@@ -88,7 +85,7 @@ import com.digital.sanghaworld.ui.hall.HallLogScreen
 import com.digital.sanghaworld.ui.hall.HallSittingScreen
 import com.digital.sanghaworld.ui.hall.HallsHomeScreen
 import com.digital.sanghaworld.ui.hall.MeditationHallScreen
-import com.digital.sanghaworld.audio.GongCatalog
+import com.digital.sanghaworld.audio.GongPreferences
 import com.digital.sanghaworld.audio.GongPreviewPlayer
 import com.digital.sanghaworld.audio.HallGuidedAudioPlayer
 import com.digital.sanghaworld.hall.AudioType
@@ -181,20 +178,12 @@ fun VipassanaApp(
     var showSettings by remember { mutableStateOf(false) }
     var showProfile by remember { mutableStateOf(false) }
     var profilePage by remember { mutableStateOf("home") }
-    var photoVersion by remember { mutableStateOf(0) }
-    val profilePhoto = remember(photoVersion) {
-        ProfileStore.photoFile(context).takeIf { it.exists() }
+    LaunchedEffect(Unit) {
+        File(context.filesDir, "profile_photo.jpg").delete()
     }
     val practiceLogs = remember(showProfile, profilePage) {
         MeditationLogStore.loadDailyTotals(context)
     }
-    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            ProfileStore.savePhoto(context, uri)
-            photoVersion += 1
-        }
-    }
-    var openJoinCode by remember { mutableStateOf(false) }
     var hallPage by remember { mutableStateOf("home") }
     var hallOrigin by remember { mutableStateOf("home") }
     var directorySearching by remember { mutableStateOf(false) }
@@ -202,7 +191,6 @@ fun VipassanaApp(
         if (hallPage != "directory") directorySearching = false
     }
     var communityMinutes by remember { mutableStateOf(30) }
-    var communityGong by remember { mutableStateOf("dhamma") }
     var askCommunityExit by remember { mutableStateOf(false) }
     var askQuitApp by remember { mutableStateOf(false) }
     var detailsFromRoom by remember { mutableStateOf(false) }
@@ -232,7 +220,9 @@ fun VipassanaApp(
     }
 
     LaunchedEffect(authState.signedIn) {
-        if (authState.ready && !authState.signedIn) SittingAlarms.cancelAll(context)
+        if (!authState.ready) return@LaunchedEffect
+        if (authState.signedIn) hallViewModel.refresh()
+        else SittingAlarms.cancelAll(context)
     }
     LaunchedEffect(hallPage, hallUi.inOpenHall) {
         if (hallPage != "community") return@LaunchedEffect
@@ -282,15 +272,10 @@ fun VipassanaApp(
             startHallAudio(left)
         }
         if (!viewModel.isRunning.value) {
-            viewModel.startTimer(context, remainingMillis, skipPrep = true)
+            viewModel.startTimer(context, remainingMillis, skipPrep = true, skipStartGong = fromTheStart)
         }
         if (fromTheStart) {
-            val gongId = if (hall?.audioType == com.digital.sanghaworld.hall.AudioType.BELL) {
-                hall.audioFileName
-            } else {
-                GongCatalog.DEFAULT_ID
-            }
-            openingBell.play(GongCatalog.byId(gongId ?: GongCatalog.DEFAULT_ID).resId) { playHallAudio() }
+            openingBell.play(GongPreferences.selectedSound(context).resId) { playHallAudio() }
         } else {
             playHallAudio()
         }
@@ -338,6 +323,12 @@ fun VipassanaApp(
                 hallPage = "detail"
             }
             showHalls && hallPage == "info" && hallOrigin == "directory" -> hallPage = "directory"
+            showHalls && hallPage == "info" && hallOrigin == "space" -> {
+                hallOrigin = "home"
+                hallPage = "home"
+                profilePage = "halls"
+                showProfile = true
+            }
             showHalls && hallPage == "detail" && hallOrigin == "directory" -> hallPage = "info"
             showHalls && hallPage != "home" -> {
                 hallPage = "home"
@@ -550,22 +541,6 @@ fun VipassanaApp(
                             }
                         )
                         DrawerMenuItem(
-                            title = "Join with code",
-                            icon = Icons.Outlined.Link,
-                            selected = false,
-                            onClick = {
-                                showHalls = true
-                                showLog = false
-                                showAwareness = false
-                                showSupport = false
-                                showSettings = false
-                                showProfile = false
-                                hallPage = "home"
-                                openJoinCode = true
-                                scope.launch { drawerState.close() }
-                            }
-                        )
-                        DrawerMenuItem(
                             title = "Support",
                             icon = Icons.Outlined.VolunteerActivism,
                             selected = showHalls && hallPage == "support",
@@ -625,7 +600,6 @@ fun VipassanaApp(
                                         when {
                                             showProfile && profilePage == "practice" -> "My Practice"
                                             showProfile && profilePage == "halls" -> "My Scheduled Halls"
-                                            showProfile && profilePage == "reminders" -> "Reminders"
                                             showProfile && profilePage == "settings" -> "Settings"
                                             showProfile -> "My Space"
                                             showAwareness -> "Be aware always"
@@ -653,6 +627,12 @@ fun VipassanaApp(
                                         IconButton(onClick = {
                                             when {
                                                 hallPage == "info" && hallOrigin == "directory" -> hallPage = "directory"
+                                                hallPage == "info" && hallOrigin == "space" -> {
+                                                    hallOrigin = "home"
+                                                    hallPage = "home"
+                                                    profilePage = "halls"
+                                                    showProfile = true
+                                                }
                                                 else -> {
                                                     hallPage = "home"
                                                     hallViewModel.refresh()
@@ -728,16 +708,27 @@ fun VipassanaApp(
                     } else if (showProfile) {
                         MySpaceScreen(
                             displayName = authState.displayName.orEmpty(),
-                            photo = profilePhoto,
                             logs = practiceLogs,
+                            sittings = hallUi.logs,
                             halls = hallUi.discovery.myHalls,
                             page = profilePage,
                             onOpen = { profilePage = it },
-                            onName = { authViewModel.updateDisplayName(it) },
-                            onAddPhoto = { pickPhoto.launch("image/*") },
-                            onRemovePhoto = {
-                                ProfileStore.clearPhoto(context)
-                                photoVersion += 1
+                            onName = {
+                                authViewModel.updateDisplayName(it)
+                                hallViewModel.noteDisplayName(it)
+                            },
+                            onDeleteAccount = {
+                                authViewModel.deleteAccount { ok ->
+                                    if (ok) showHome()
+                                }
+                            },
+                            onOpenHall = { card ->
+                                hallViewModel.openHall(card.hall.id)
+                                detailsFromRoom = false
+                                hallOrigin = "space"
+                                hallPage = "info"
+                                showProfile = false
+                                showHalls = true
                             },
                             modifier = Modifier.padding(innerPadding)
                         )
@@ -756,17 +747,14 @@ fun VipassanaApp(
                                     hallViewModel.enterCommunity()
                                     val length = communityMinutes * 60_000L
                                     viewModel.startTimer(context, length, skipPrep = true)
-                                    if (communityGong != "none") {
-                                        openingBell.play(GongCatalog.byId(communityGong).resId)
-                                    }
                                 },
                                 modifier = Modifier.padding(innerPadding)
                             )
                             "create" -> CreateHallScreen(
-                                onCreate = { name, desc, dur, hour, minute, type, days, vis, audio, audioUrl, audioName, audioDur ->
+                                onCreate = { name, desc, dur, hour, minute, type, days, vis, audio, audioUrl, audioName, audioDur, startDate ->
                                     hallViewModel.createHall(
                                         name, desc, dur, hour, minute, type, days, vis, audio,
-                                        audioUrl, audioName, audioDur
+                                        audioUrl, audioName, audioDur, startDate
                                     ) { id, showHall ->
                                         if (id != null) hallPage = if (showHall) "detail" else "info"
                                     }
@@ -795,10 +783,12 @@ fun VipassanaApp(
                                         initialAudioUrl = hall.audioUrl,
                                         initialAudioFileName = hall.audioFileName,
                                         initialAudioDurationSeconds = hall.audioDurationSeconds,
-                                        onCreate = { name, desc, dur, hour, minute, type, days, vis, audio, audioUrl, audioName, audioDur ->
+                                        initialDays = schedule?.daysOfWeek ?: emptySet(),
+                                        initialStartDate = schedule?.startDate,
+                                        onCreate = { name, desc, dur, hour, minute, type, days, vis, audio, audioUrl, audioName, audioDur, startDate ->
                                             hallViewModel.updateHall(
                                                 hall.id, name, desc, dur, hour, minute, type, days, vis, audio,
-                                                audioUrl, audioName, audioDur
+                                                audioUrl, audioName, audioDur, startDate
                                             ) { ok ->
                                                 if (ok) hallPage = "detail"
                                             }
@@ -918,6 +908,11 @@ fun VipassanaApp(
                                         hallPage = "detail"
                                     } else if (hallOrigin == "directory") {
                                         hallPage = "directory"
+                                    } else if (hallOrigin == "space") {
+                                        hallOrigin = "home"
+                                        hallPage = "home"
+                                        profilePage = "halls"
+                                        showProfile = true
                                     } else {
                                         hallPage = "home"
                                         hallViewModel.refresh()
@@ -978,13 +973,6 @@ fun VipassanaApp(
                                     val roomOpen = card.remainingSeconds != null || until in 0..(15 * 60 * 1000L)
                                     detailsFromRoom = false
                                     hallPage = if (roomOpen) "detail" else "info"
-                                },
-                                openJoinCode = openJoinCode,
-                                onJoinCodeConsumed = { openJoinCode = false },
-                                onJoinCode = { code ->
-                                    hallViewModel.findByShareCode(code) { id ->
-                                        if (id != null) hallPage = "info"
-                                    }
                                 },
                                 modifier = Modifier.padding(innerPadding)
                             )

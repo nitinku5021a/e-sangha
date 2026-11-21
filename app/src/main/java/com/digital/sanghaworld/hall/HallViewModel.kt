@@ -157,6 +157,36 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun noteDisplayName(name: String) {
+        val trimmed = name.trim().take(120)
+        if (trimmed.isBlank()) return
+        val me = _state.value.profile
+        val id = me?.id
+        _state.value = _state.value.copy(
+            profile = me?.copy(displayName = trimmed),
+            communityPeople = _state.value.communityPeople.map { person ->
+                if (id != null && person.userId.equals(id, ignoreCase = true)) person.copy(label = trimmed) else person
+            },
+            sittingParticipants = _state.value.sittingParticipants.map { person ->
+                if (id != null && person.userId.equals(id, ignoreCase = true)) person.copy(label = trimmed) else person
+            }
+        )
+        prepareHallScene()
+        if (!useRemote) {
+            mutate { s -> s.copy(profile = s.profile.copy(displayName = trimmed)) }
+        }
+    }
+
+    private fun ownName(userId: String, fallback: String): String {
+        val mine = _state.value.profile?.id
+        val chosen = tokens.displayName?.takeIf { it.isNotBlank() }
+        return if (mine != null && userId.equals(mine, ignoreCase = true) && chosen != null) chosen else fallback
+    }
+
+    private fun named(people: List<ParticipantPresence>): List<ParticipantPresence> {
+        return people.map { it.copy(label = ownName(it.userId, it.label)) }
+    }
+
     fun beatCommunity() {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
@@ -183,7 +213,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             }
             ParticipantPresence(
                 person.userId,
-                person.name.ifBlank { "Someone" },
+                ownName(person.userId, person.name.ifBlank { "Someone" }),
                 DisplayMode.AVATAR,
                 joined
             )
@@ -303,6 +333,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         audioUrl: String? = null,
         audioFileName: String? = null,
         audioDurationSeconds: Int? = null,
+        startDate: java.time.LocalDate? = null,
         onCreated: (String?, Boolean) -> Unit = { _, _ -> }
     ) {
         val hallName = camelCaseHallName(name)
@@ -314,13 +345,13 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                         api.createHall(
                             hallName, description, durationMinutes, hour, minute,
                             scheduleType, days, visibility, audioType,
-                            audioUrl, audioFileName, audioDurationSeconds
+                            audioUrl, audioFileName, audioDurationSeconds, startDate?.toString()
                         )
                     } else {
                         createHallLocal(
                             hallName, description, durationMinutes, hour, minute,
                             scheduleType, days, visibility, audioType,
-                            audioUrl, audioFileName, audioDurationSeconds
+                            audioUrl, audioFileName, audioDurationSeconds, startDate
                         )
                     }
                 }
@@ -387,7 +418,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         audioType: AudioType,
         audioUrl: String? = null,
         audioFileName: String? = null,
-        audioDurationSeconds: Int? = null
+        audioDurationSeconds: Int? = null,
+        startDate: java.time.LocalDate? = null
     ): String {
         val hallId = HallIds.newId()
         mutate { s ->
@@ -411,7 +443,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 scheduleType = scheduleType,
                 startLocalTime = LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)),
                 timezone = hall.timezone,
-                daysOfWeek = days
+                daysOfWeek = days,
+                startDate = startDate
             )
             val membership = HallMembership(hallId, s.profile.id)
             s.copy(
@@ -437,6 +470,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         audioUrl: String? = null,
         audioFileName: String? = null,
         audioDurationSeconds: Int? = null,
+        startDate: java.time.LocalDate? = null,
         onDone: (Boolean) -> Unit = {}
     ) {
         val hallName = camelCaseHallName(name)
@@ -448,7 +482,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                         api.updateHall(
                             hallId, hallName, description, durationMinutes, hour, minute,
                             scheduleType, days, visibility, audioType,
-                            audioUrl, audioFileName, audioDurationSeconds
+                            audioUrl, audioFileName, audioDurationSeconds, startDate?.toString()
                         )
                     } else {
                         mutate { s ->
@@ -478,7 +512,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                                         scheduleType = scheduleType,
                                         startLocalTime = LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)),
                                         timezone = ZoneId.systemDefault().id,
-                                        daysOfWeek = days
+                                        daysOfWeek = days,
+                                        startDate = startDate
                                     )
                                 }
                             )
@@ -561,12 +596,14 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                     activeHallId = hallId
                     sessionJoinMillis = SessionClock.nowMillis()
                     val hall = runCatching { api.getHall(hallId).hall }.getOrNull()
-                    val people = runCatching { api.sessionParticipants(joined.sessionId) }.getOrDefault(
-                        listOf(
-                            ParticipantPresence(
-                                api.currentUserId(),
-                                tokens.displayName ?: "You",
-                                DisplayMode.AVATAR
+                    val people = named(
+                        runCatching { api.sessionParticipants(joined.sessionId) }.getOrDefault(
+                            listOf(
+                                ParticipantPresence(
+                                    api.currentUserId(),
+                                    tokens.displayName ?: "You",
+                                    DisplayMode.AVATAR
+                                )
                             )
                         )
                     )
@@ -595,7 +632,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 if (useRemote) {
-                    val incoming = api.sessionParticipants(sessionId)
+                    val incoming = named(api.sessionParticipants(sessionId))
                     val previous = _state.value.sittingParticipants
                     val people = if (incoming.isEmpty() && previous.isNotEmpty()) previous else incoming
                     _state.value = _state.value.copy(
@@ -622,12 +659,14 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                         activeHallId = hallId
                         sessionJoinMillis = SessionClock.nowMillis()
                         val hall = runCatching { api.getHall(hallId).hall }.getOrNull()
-                        val people = runCatching { api.sessionParticipants(joined.sessionId) }.getOrDefault(
-                            listOf(
-                                ParticipantPresence(
-                                    api.currentUserId(),
-                                    tokens.displayName ?: "You",
-                                    DisplayMode.AVATAR
+                        val people = named(
+                            runCatching { api.sessionParticipants(joined.sessionId) }.getOrDefault(
+                                listOf(
+                                    ParticipantPresence(
+                                        api.currentUserId(),
+                                        tokens.displayName ?: "You",
+                                        DisplayMode.AVATAR
+                                    )
                                 )
                             )
                         )

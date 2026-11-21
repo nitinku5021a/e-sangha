@@ -1,8 +1,10 @@
 package com.digital.sanghaworld.ui.hall
 
+import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,11 +17,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.VolumeOff
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,15 +36,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.audio.AudioDurationProbe
 import com.digital.sanghaworld.audio.GongCatalog
 import com.digital.sanghaworld.audio.GongPreviewPlayer
@@ -45,18 +61,18 @@ import com.digital.sanghaworld.audio.DriveAudioFile
 import com.digital.sanghaworld.hall.AudioType
 import com.digital.sanghaworld.hall.HallVisibility
 import com.digital.sanghaworld.hall.ScheduleType
-import com.digital.sanghaworld.ui.ChoiceChip
 import com.digital.sanghaworld.ui.QuietButton
 import com.digital.sanghaworld.ui.SanghaField
 import com.digital.sanghaworld.ui.SanghaScreenPadding
-import com.digital.sanghaworld.ui.ScreenIntro
-import com.digital.sanghaworld.ui.SectionLabel
 import com.digital.sanghaworld.ui.StatusText
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -78,7 +94,8 @@ fun CreateHallScreen(
         audioType: AudioType,
         audioUrl: String?,
         audioFileName: String?,
-        audioDurationSeconds: Int?
+        audioDurationSeconds: Int?,
+        startDate: LocalDate
     ) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -95,7 +112,9 @@ fun CreateHallScreen(
     initialTimeZone: String = ZoneId.systemDefault().id,
     initialAudioUrl: String? = null,
     initialAudioFileName: String? = null,
-    initialAudioDurationSeconds: Int? = null
+    initialAudioDurationSeconds: Int? = null,
+    initialDays: Set<DayOfWeek> = emptySet(),
+    initialStartDate: LocalDate? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -134,8 +153,28 @@ fun CreateHallScreen(
     var audioDurationSeconds by remember { mutableStateOf(initialAudioDurationSeconds) }
     var audioStatus by remember { mutableStateOf<String?>(null) }
     var listing by remember { mutableStateOf(false) }
-    var sunday by remember { mutableStateOf(initialScheduleType == ScheduleType.WEEKLY) }
+    var startDate by remember { mutableStateOf(initialStartDate ?: LocalDate.now()) }
+    var selectedDays by remember {
+        mutableStateOf(
+            when (initialScheduleType) {
+                ScheduleType.WEEKLY, ScheduleType.CUSTOM ->
+                    initialDays.ifEmpty { setOf(DayOfWeek.SUNDAY) }
+                else -> emptySet()
+            }
+        )
+    }
+    var customDuration by remember {
+        mutableStateOf(initialDurationMinutes !in setOf(30, 45, 60, 90))
+    }
     var nameError by remember { mutableStateOf<String?>(null) }
+    var scheduleError by remember { mutableStateOf<String?>(null) }
+    val zoneLabel = remember {
+        val zone = ZoneId.systemDefault()
+        zone.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    }
+    val dateLabel = remember(startDate) {
+        startDate.format(DateTimeFormatter.ofPattern("d MMM yyyy"))
+    }
     val timeLabel = remember(startTime) {
         startTime.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     }
@@ -147,85 +186,197 @@ fun CreateHallScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = SanghaScreenPadding, vertical = 8.dp)
     ) {
-        ScreenIntro(
-            subtitle = "A shared time, a silent room. Others can join by code."
+        Text(
+            "Set a time for others to meditate with you.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(20.dp))
-        SanghaField(name, { name = it; nameError = null }, "Name")
+        Spacer(Modifier.height(16.dp))
+        FormHeading("Hall Details")
+        SanghaField(
+            name,
+            { name = it; nameError = null },
+            "Hall name",
+            placeholder = "e.g. Morning Meditation"
+        )
         if (nameError != null) {
             Spacer(Modifier.height(6.dp))
             StatusText(nameError!!, error = true)
         }
         Spacer(Modifier.height(14.dp))
-        SanghaField(description, { description = it }, "Description", singleLine = false)
-        Spacer(Modifier.height(14.dp))
         SanghaField(
-            duration,
-            { if (it.all { c -> c.isDigit() }) duration = it },
-            "Duration (minutes)",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            description,
+            { description = it },
+            "Description (optional)",
+            placeholder = "Add a few details about this sitting.",
+            singleLine = false
         )
-        Spacer(Modifier.height(14.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
+        Spacer(Modifier.height(18.dp))
+        FormHeading("Sitting Duration")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(30, 45, 60, 90).forEach { minutes ->
+                PillChoice(
+                    "$minutes min",
+                    selected = !customDuration && duration == minutes.toString(),
+                    onClick = {
+                        customDuration = false
+                        duration = minutes.toString()
+                    }
+                )
+            }
+            PillChoice("Custom", selected = customDuration, onClick = { customDuration = true })
+        }
+        if (customDuration) {
+            Spacer(Modifier.height(10.dp))
+            SanghaField(
+                duration,
+                { if (it.length <= 3 && it.all { c -> c.isDigit() }) duration = it },
+                "Minutes",
+                placeholder = "1–720",
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+        }
+        Spacer(Modifier.height(22.dp))
+        FormHeading("Schedule")
+        val customDays = scheduleType == ScheduleType.CUSTOM || scheduleType == ScheduleType.WEEKLY
+        SegmentedRow(
+            listOf(
+                "Once" to (scheduleType == ScheduleType.ONCE),
+                "Daily" to (scheduleType == ScheduleType.DAILY),
+                "Weekdays" to (scheduleType == ScheduleType.WEEKDAYS),
+                "Custom Days" to customDays
+            )
+        ) { index ->
+            scheduleError = null
+            scheduleType = when (index) {
+                0 -> ScheduleType.ONCE
+                1 -> ScheduleType.DAILY
+                2 -> ScheduleType.WEEKDAYS
+                else -> ScheduleType.CUSTOM
+            }
+        }
+        if (customDays) {
+            Spacer(Modifier.height(14.dp))
+            Text("Repeat on", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                DayOfWeek.entries.forEach { day ->
+                    val on = day in selectedDays
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.background)
+                            .border(1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape)
+                            .clickable {
+                                scheduleError = null
+                                selectedDays = if (on) selectedDays - day else selectedDays + day
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            day.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                            color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onBackground,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Repeats every week on selected days.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+        if (scheduleError != null) {
+            Spacer(Modifier.height(6.dp))
+            StatusText(scheduleError!!, error = true)
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Start date", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.height(6.dp))
+                PickerField(Icons.Outlined.CalendarMonth, dateLabel) {
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, day -> startDate = LocalDate.of(year, month + 1, day) },
+                        startDate.year,
+                        startDate.monthValue - 1,
+                        startDate.dayOfMonth
+                    ).show()
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text("Start time", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.height(6.dp))
+                PickerField(Icons.Outlined.Schedule, timeLabel) {
                     TimePickerDialog(
                         context,
-                        { _, hourOfDay, minuteOfHour ->
-                            startTime = LocalTime.of(hourOfDay, minuteOfHour)
-                        },
+                        { _, hourOfDay, minuteOfHour -> startTime = LocalTime.of(hourOfDay, minuteOfHour) },
                         startTime.hour,
                         startTime.minute,
                         DateFormat.is24HourFormat(context)
                     ).show()
                 }
-        ) {
-            SanghaField(
-                value = timeLabel,
-                onValueChange = {},
-                label = "Start time",
-                supporting = "Your local time",
-                enabled = false,
-                trailing = { Icon(Icons.Outlined.Schedule, contentDescription = "Pick time") }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(zoneLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(22.dp))
+        FormHeading("Audio (Optional)")
+        Text(
+            "Choose what participants will hear during the sitting.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(10.dp))
+        SegmentedRow(
+            listOf(
+                "Silence" to (audioType == AudioType.NONE),
+                "Meditation Bell" to (audioType == AudioType.BELL),
+                "Custom Audio" to (audioType == AudioType.FILE)
             )
+        ) { index ->
+            audioType = when (index) {
+                0 -> AudioType.NONE
+                1 -> AudioType.BELL
+                else -> AudioType.FILE
+            }
         }
-        Spacer(Modifier.height(18.dp))
-        SectionLabel("Schedule")
         Spacer(Modifier.height(10.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChoiceChip("Daily", scheduleType == ScheduleType.DAILY, onClick = { scheduleType = ScheduleType.DAILY })
-            ChoiceChip("Weekdays", scheduleType == ScheduleType.WEEKDAYS, onClick = { scheduleType = ScheduleType.WEEKDAYS })
-            ChoiceChip("Weekly", scheduleType == ScheduleType.WEEKLY, onClick = { scheduleType = ScheduleType.WEEKLY; sunday = true })
-            ChoiceChip("Once", scheduleType == ScheduleType.ONCE, onClick = { scheduleType = ScheduleType.ONCE })
-        }
-        Spacer(Modifier.height(18.dp))
-        SectionLabel("Visibility")
-        Spacer(Modifier.height(10.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChoiceChip("Public", visibility == HallVisibility.PUBLIC, onClick = { visibility = HallVisibility.PUBLIC })
-            ChoiceChip("Private", visibility == HallVisibility.PRIVATE, onClick = { visibility = HallVisibility.PRIVATE })
-        }
-        Spacer(Modifier.height(18.dp))
-        SectionLabel("Audio")
-        Spacer(Modifier.height(10.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChoiceChip("Silence", audioType == AudioType.NONE, onClick = { audioType = AudioType.NONE })
-            ChoiceChip("Bell", audioType == AudioType.BELL, onClick = { audioType = AudioType.BELL })
-            ChoiceChip("Custom audio", audioType == AudioType.FILE, onClick = { audioType = AudioType.FILE })
+        if (audioType == AudioType.NONE) {
+            AudioNote("No audio will be played.")
         }
         if (audioType == AudioType.BELL) {
+            AudioNote("A bell marks the start of the sitting.", Icons.Outlined.VolumeUp)
             Spacer(Modifier.height(10.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 GongCatalog.all.forEach { sound ->
-                    ChoiceChip(sound.title, bellId == sound.id, onClick = {
+                    PillChoice(sound.title, bellId == sound.id) {
                         bellPreview.play(sound.resId)
                         bellId = sound.id
-                    })
+                    }
                 }
             }
         }
         if (audioType == AudioType.FILE) {
+            Spacer(Modifier.height(14.dp))
+            var showGuide by remember { mutableStateOf(false) }
+            Text(
+                if (showGuide) "Hide the guide" else "How this works",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { showGuide = !showGuide }
+            )
+            if (showGuide) {
+                Spacer(Modifier.height(10.dp))
+                AudioLinkGuide()
+            }
             Spacer(Modifier.height(14.dp))
             SanghaField(
                 value = driveLink,
@@ -257,7 +408,7 @@ fun CreateHallScreen(
             )
             if (audioFiles.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
-                SectionLabel("Listen, then choose")
+                FormHeading("Listen, then choose")
                 Spacer(Modifier.height(8.dp))
                 audioFiles.forEach { file ->
                     val chosen = selectedAudio?.playbackUrl == file.playbackUrl
@@ -318,21 +469,30 @@ fun CreateHallScreen(
         }
         Spacer(Modifier.height(24.dp))
         QuietButton(
-            text = submitLabel,
+            text = if (submitLabel == "Create") "Create Hall" else submitLabel,
             emphasized = true,
             onClick = {
                 if (name.isBlank()) {
                     nameError = "Give the hall a name."
                     return@QuietButton
                 }
+                val days = if (scheduleType == ScheduleType.CUSTOM || scheduleType == ScheduleType.WEEKLY) {
+                    selectedDays
+                } else {
+                    emptySet()
+                }
+                if ((scheduleType == ScheduleType.CUSTOM || scheduleType == ScheduleType.WEEKLY) && days.isEmpty()) {
+                    scheduleError = "Choose at least one day."
+                    return@QuietButton
+                }
                 onCreate(
                     name.trim(),
                     description.trim(),
-                    duration.toIntOrNull() ?: 60,
+                    duration.toIntOrNull()?.coerceIn(1, 720) ?: 60,
                     startTime.hour,
                     startTime.minute,
-                    scheduleType,
-                    if (scheduleType == ScheduleType.WEEKLY) setOf(DayOfWeek.SUNDAY) else emptySet(),
+                    if (scheduleType == ScheduleType.WEEKLY) ScheduleType.CUSTOM else scheduleType,
+                    days,
                     visibility,
                     audioType,
                     if (audioType == AudioType.FILE) selectedAudio?.playbackUrl else null,
@@ -341,7 +501,8 @@ fun CreateHallScreen(
                         AudioType.BELL -> bellId
                         else -> null
                     },
-                    if (audioType == AudioType.FILE) audioDurationSeconds else null
+                    if (audioType == AudioType.FILE) audioDurationSeconds else null,
+                    startDate
                 )
             },
             modifier = Modifier.fillMaxWidth()
@@ -349,6 +510,164 @@ fun CreateHallScreen(
         Spacer(Modifier.height(10.dp))
         QuietButton(text = "Cancel", onClick = onCancel, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+private val audioGuideSteps = listOf(
+    "Put the meditation audio in a Google Drive folder.",
+    "Open Share and choose “Anyone with the link”.",
+    "Copy that link and paste it in the field below.",
+    "Tap List audio files, listen, then choose one."
+)
+
+@Composable
+private fun AudioLinkGuide() {
+    var step by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2400)
+            step = (step + 1) % audioGuideSteps.size
+        }
+    }
+    val colors = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.secondaryContainer)
+            .padding(16.dp)
+    ) {
+        Text(
+            "Using a Drive link",
+            style = MaterialTheme.typography.titleSmall,
+            color = colors.onBackground
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            audioGuideSteps.forEachIndexed { index, _ ->
+                val current = index == step
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(if (current) colors.primary else colors.background)
+                        .border(1.dp, if (current) colors.primary else colors.outline, CircleShape)
+                        .clickable { step = index },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "${index + 1}",
+                        color = if (current) colors.onPrimary else colors.onBackground,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            audioGuideSteps[step],
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.onBackground
+        )
+    }
+}
+
+@Composable
+private fun FormHeading(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier.padding(bottom = 10.dp)
+    )
+}
+
+@Composable
+private fun PillChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Text(
+        label,
+        color = if (selected) colors.onPrimary else colors.onBackground,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(if (selected) colors.primary else colors.background)
+            .border(1.dp, if (selected) colors.primary else colors.outline, RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    )
+}
+
+@Composable
+private fun SegmentedRow(options: List<Pair<String, Boolean>>, onSelect: (Int) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(24.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.secondaryContainer)
+            .padding(4.dp)
+    ) {
+        options.forEachIndexed { index, (label, selected) ->
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(shape)
+                    .background(if (selected) colors.primary else colors.secondaryContainer)
+                    .clickable { onSelect(index) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    label,
+                    color = if (selected) colors.onPrimary else colors.onBackground,
+                    style = MaterialTheme.typography.labelMedium,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickerField(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.surface)
+            .border(1.dp, colors.outline, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = colors.onBackground, maxLines = 1)
+    }
+}
+
+@Composable
+private fun AudioNote(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Outlined.VolumeOff
+) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(colors.secondaryContainer)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
     }
 }
 
