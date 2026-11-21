@@ -124,7 +124,8 @@ class SittingAlarmReceiver : BroadcastReceiver() {
         val power = context.getSystemService(PowerManager::class.java)
         val wake = power?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "esangha:sitting")
         wake?.acquire(20_000L)
-        val name = intent.getStringExtra("name").orEmpty().ifBlank { "Meditation" }
+        val rawName = intent.getStringExtra("name").orEmpty()
+        val name = if (rawName.isBlank()) "Meditation" else camelCaseHallName(rawName)
         val kind = intent.getStringExtra("kind") ?: return
         val start = kind == SittingAlarms.KIND_START
         val title = if (start) "Meditation is starting" else "Meditation in 15 minutes"

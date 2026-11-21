@@ -31,6 +31,7 @@ import com.digital.sanghaworld.audio.GongCatalog
 import com.digital.sanghaworld.audio.GongPreviewPlayer
 import com.digital.sanghaworld.audio.HallGuidedAudioPlayer
 import com.digital.sanghaworld.hall.AudioType
+import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.hall.CompletionStatus
 import com.digital.sanghaworld.hall.HallUiState
 import com.digital.sanghaworld.hall.ScheduleType
@@ -142,7 +143,7 @@ fun HallDetailScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = SanghaScreenPadding, vertical = 8.dp)
     ) {
-        Text(hall.name, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+        Text(camelCaseHallName(hall.name), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(6.dp))
         Text(
             when {
@@ -304,7 +305,7 @@ fun HallDetailScreen(
                         type = "text/plain"
                         putExtra(
                             Intent.EXTRA_TEXT,
-                            "Sit with me in ${hall.name}: https://meditation.app/h/${hall.shareCode}"
+                            "Sit with me in ${camelCaseHallName(hall.name)}: https://meditation.app/h/${hall.shareCode}"
                         )
                     }
                     context.startActivity(Intent.createChooser(send, "Share hall"))

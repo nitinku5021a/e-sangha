@@ -38,6 +38,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import androidx.compose.ui.unit.dp
 import com.digital.sanghaworld.hall.HallCard
+import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.hall.HallUiState
 import com.digital.sanghaworld.ui.SanghaField
 import com.digital.sanghaworld.ui.StatusText
@@ -197,7 +198,7 @@ private fun JoinedHallRow(card: HallCard, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Text(
-            card.hall.name,
+            camelCaseHallName(card.hall.name),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,

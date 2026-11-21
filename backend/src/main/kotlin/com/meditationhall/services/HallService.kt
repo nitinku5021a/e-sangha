@@ -273,10 +273,9 @@ class HallService {
                 token.split(Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})"))
             }
             .filter { it.isNotEmpty() }
-        if (words.isEmpty()) return "untitledHall"
-        return words.mapIndexed { index, part ->
-            val lower = part.lowercase()
-            if (index == 0) lower else lower.replaceFirstChar { it.titlecase() }
-        }.joinToString("")
+        if (words.isEmpty()) return "UntitledHall"
+        return words.joinToString("") { part ->
+            part.lowercase().replaceFirstChar { it.titlecase() }
+        }
     }
 }

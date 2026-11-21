@@ -22,7 +22,11 @@ class CommunityService {
                 CommunityPresence.deleteWhere { userId eq row[CommunityPresence.userId] }
             }
         val people = CommunityPresence.selectAll().map {
-            CommunityPerson(it[CommunityPresence.userId].toString(), it[CommunityPresence.displayName])
+            CommunityPerson(
+                it[CommunityPresence.userId].toString(),
+                it[CommunityPresence.displayName],
+                it[CommunityPresence.joinedAt].toEpochMilli()
+            )
         }
         CommunityPresenceResponse(people)
     }

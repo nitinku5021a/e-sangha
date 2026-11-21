@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.hall.MeditationSeat
+import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.ui.theme.ForestSoft
 import com.digital.sanghaworld.ui.theme.HallCream
 import com.digital.sanghaworld.ui.theme.Ink
@@ -105,6 +106,7 @@ fun MeditationHallScreen(
         nowMillis = System.currentTimeMillis()
     }
     val untilStart = if (joined && startsAtMillis != null) startsAtMillis - nowMillis else 0L
+    val shownHallName = hallName.trim().let { if (it.isEmpty()) "Meditation hall" else camelCaseHallName(it) }
 
     Column(
         modifier
@@ -115,7 +117,7 @@ fun MeditationHallScreen(
     ) {
         if (!focusMode) {
             HallHeader(
-                hallName = hallName.ifBlank { "Meditation hall" },
+                hallName = shownHallName,
                 occupied = occupied,
                 moreOpen = moreOpen,
                 onBack = onBack,
@@ -177,7 +179,7 @@ fun MeditationHallScreen(
 
         if (focusMode) {
             Text(
-                hallName.ifBlank { "Meditation hall" },
+                shownHallName,
                 color = Ink,
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,

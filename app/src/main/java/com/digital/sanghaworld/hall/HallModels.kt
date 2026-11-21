@@ -102,7 +102,14 @@ data class HallStats(
 data class ParticipantPresence(
     val userId: String,
     val label: String,
-    val displayMode: DisplayMode
+    val displayMode: DisplayMode,
+    val joinedAtMillis: Long = 0
+)
+
+data class CommunitySitter(
+    val userId: String,
+    val name: String,
+    val joinedAtMillis: Long
 )
 
 data class SupporterProfile(
@@ -155,11 +162,10 @@ fun camelCaseHallName(raw: String): String {
             token.split(Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})"))
         }
         .filter { it.isNotEmpty() }
-    if (words.isEmpty()) return "untitledHall"
-    return words.mapIndexed { index, part ->
-        val lower = part.lowercase()
-        if (index == 0) lower else lower.replaceFirstChar { it.titlecase() }
-    }.joinToString("")
+    if (words.isEmpty()) return "UntitledHall"
+    return words.joinToString("") { part ->
+        part.lowercase().replaceFirstChar { it.titlecase() }
+    }
 }
 
 object HallIds {

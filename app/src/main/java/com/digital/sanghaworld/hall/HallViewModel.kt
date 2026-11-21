@@ -57,6 +57,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
     var sessionJoinMillis: Long = 0
         private set
     private var assignedSeatId: Int? = null
+    private var localCommunityJoinedAt: Long = 0
 
     init {
         refresh()
@@ -139,6 +140,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun enterCommunity() {
+        if (localCommunityJoinedAt == 0L) localCommunityJoinedAt = System.currentTimeMillis()
         viewModelScope.launch {
             val remote = withContext(Dispatchers.IO) {
                 runCatching {
@@ -160,16 +162,27 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun leaveCommunity() {
+        localCommunityJoinedAt = 0
         leaveMeditationSeat()
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { if (useRemote) api.communityLeave() }
         }
     }
 
-    private fun applyCommunity(remote: List<Pair<String, String>>) {
+    private fun applyCommunity(remote: List<CommunitySitter>) {
         val me = _state.value.profile
-        val incoming = remote.map { (id, name) ->
-            ParticipantPresence(id, name.ifBlank { "Someone" }, DisplayMode.AVATAR)
+        val incoming = remote.map { person ->
+            val joined = when {
+                person.joinedAtMillis > 0 -> person.joinedAtMillis
+                me != null && person.userId.equals(me.id, ignoreCase = true) -> localCommunityJoinedAt
+                else -> 0L
+            }
+            ParticipantPresence(
+                person.userId,
+                person.name.ifBlank { "Someone" },
+                DisplayMode.AVATAR,
+                joined
+            )
         }.distinctBy { it.userId.lowercase() }
         val incomingById = incoming.associateBy { it.userId.lowercase() }
         val previous = _state.value.sittingParticipants
@@ -181,11 +194,17 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 it.label.equals(me.displayName, ignoreCase = true)
         }
         if (_state.value.meditating && me != null && !listed && remote.isEmpty()) {
-            people += ParticipantPresence(me.id, me.displayName.ifBlank { "You" }, DisplayMode.AVATAR)
+            people += ParticipantPresence(
+                me.id,
+                me.displayName.ifBlank { "You" },
+                DisplayMode.AVATAR,
+                localCommunityJoinedAt
+            )
         }
         _state.value = _state.value.copy(
             sittingParticipants = people,
-            selectedParticipantCount = people.size
+            selectedParticipantCount = people.size,
+            communityCount = people.size
         )
         prepareHallScene()
     }
@@ -550,7 +569,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     )
                     _state.value = _state.value.copy(
-                        sittingHallName = hall?.name ?: _state.value.selectedHall?.name,
+                        sittingHallName = (hall?.name ?: _state.value.selectedHall?.name)
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { camelCaseHallName(it) },
                         sittingCount = people.size.coerceAtLeast(joined.participantCount),
                         sittingExpected = maxOf(
                             _state.value.sittingExpected,
@@ -606,7 +627,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         )
                         _state.value = _state.value.copy(
-                            sittingHallName = hall?.name,
+                            sittingHallName = hall?.name?.let { camelCaseHallName(it) },
                             sittingCount = people.size.coerceAtLeast(1),
                             sittingExpected = maxOf(
                                 _state.value.sittingExpected,
@@ -642,7 +663,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         val you = ParticipantPresence(s.profile.id, s.profile.displayName, DisplayMode.AVATAR)
         val presence = listOf(you)
         _state.value = _state.value.copy(
-            sittingHallName = hall.name,
+            sittingHallName = camelCaseHallName(hall.name),
             sittingParticipants = presence,
             sittingCount = presence.size,
             sittingExpected = maxOf(_state.value.selectedParticipantCount, presence.size)
@@ -709,7 +730,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                 userId = s.profile.id,
                 sessionId = sessionId,
                 hallId = hallId,
-                hallName = hall?.name ?: "Hall",
+                hallName = camelCaseHallName(hall?.name ?: "Hall"),
                 date = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate(),
                 durationSeconds = attendedSec,
                 completionStatus = completion

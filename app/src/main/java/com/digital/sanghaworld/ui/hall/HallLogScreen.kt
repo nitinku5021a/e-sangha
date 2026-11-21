@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.digital.sanghaworld.hall.CompletionStatus
+import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.hall.HallUiState
 import com.digital.sanghaworld.ui.EmptyState
 import com.digital.sanghaworld.ui.QuietButton
@@ -75,7 +76,7 @@ fun HallLogScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                log.hallName,
+                                camelCaseHallName(log.hallName),
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(

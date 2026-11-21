@@ -210,7 +210,7 @@ class HallApi(
                 userId = tokens.userId.orEmpty(),
                 sessionId = o.optString("sessionId"),
                 hallId = o.getString("hallId"),
-                hallName = o.getString("hallName"),
+                hallName = camelCaseHallName(o.getString("hallName")),
                 date = LocalDate.parse(o.getString("date")),
                 durationSeconds = o.getInt("durationSeconds"),
                 completionStatus = runCatching { CompletionStatus.valueOf(o.getString("completionStatus")) }
@@ -305,7 +305,7 @@ class HallApi(
         val hall = Hall(
             id = o.getString("id"),
             creatorId = o.getString("creatorId"),
-            name = o.getString("name"),
+            name = camelCaseHallName(o.getString("name")),
             description = o.getString("description"),
             visibility = HallVisibility.valueOf(o.getString("visibility")),
             durationSeconds = o.getInt("durationSeconds"),
@@ -337,12 +337,12 @@ class HallApi(
         )
     }
 
-    fun communityPeople(): List<Pair<String, String>> {
+    fun communityPeople(): List<CommunitySitter> {
         val res = request("GET", "/v1/community")
         return parsePeople(res)
     }
 
-    fun communityJoin(): List<Pair<String, String>> {
+    fun communityJoin(): List<CommunitySitter> {
         val res = request("POST", "/v1/community/join", JSONObject())
         return parsePeople(res)
     }
@@ -355,11 +355,15 @@ class HallApi(
         request("POST", "/v1/community/leave", JSONObject())
     }
 
-    private fun parsePeople(res: JSONObject): List<Pair<String, String>> {
+    private fun parsePeople(res: JSONObject): List<CommunitySitter> {
         val arr = res.optJSONArray("people") ?: return emptyList()
         return (0 until arr.length()).map {
             val o = arr.getJSONObject(it)
-            o.getString("userId") to o.optString("displayName", "Someone")
+            CommunitySitter(
+                userId = o.getString("userId"),
+                name = o.optString("displayName", "Someone"),
+                joinedAtMillis = o.optLong("joinedAtMillis")
+            )
         }
     }
 

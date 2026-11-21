@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import com.digital.sanghaworld.hall.DisplayMode
+import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.hall.ParticipantPresence
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,7 @@ fun TimerScreen(
     val minutes = (timeLeft / 1000) / 60
     val seconds = (timeLeft / 1000) % 60
     val timeFormatted = String.format("%02d:%02d", minutes, seconds)
+    val shownHallName = hallName?.takeIf { it.isNotBlank() }?.let { camelCaseHallName(it) }
 
     Column(
         modifier = Modifier
@@ -48,7 +50,7 @@ fun TimerScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = hallName ?: if (isInPrep) "SETTLING" else "SITTING",
+            text = shownHallName ?: if (isInPrep) "SETTLING" else "SITTING",
             style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp),
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
         )
@@ -88,7 +90,7 @@ fun TimerScreen(
             color = MaterialTheme.colorScheme.primary
         )
 
-        if (hallName != null) {
+        if (shownHallName != null) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = if (sittingCount == 1) "1 sitting" else "$sittingCount sitting",

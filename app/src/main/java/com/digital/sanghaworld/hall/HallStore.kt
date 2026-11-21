@@ -96,7 +96,7 @@ class HallStore(private val context: Context) {
         val morning = Hall(
             id = "hall-morning",
             creatorId = "seed",
-            name = "Morning Vipassana",
+            name = camelCaseHallName("Morning Vipassana"),
             description = "A quiet daily sit at dawn. Shared timer, optional bell, no conversation.",
             visibility = HallVisibility.PUBLIC,
             durationSeconds = 3600,
@@ -106,7 +106,7 @@ class HallStore(private val context: Context) {
         val evening = Hall(
             id = "hall-evening",
             creatorId = "seed",
-            name = "Evening Sit",
+            name = camelCaseHallName("Evening Sit"),
             description = "Forty-five minutes after the day. Sit together in silence.",
             visibility = HallVisibility.PUBLIC,
             durationSeconds = 2700,
@@ -116,7 +116,7 @@ class HallStore(private val context: Context) {
         val weekend = Hall(
             id = "hall-weekend",
             creatorId = "seed",
-            name = "Sunday Long Sit",
+            name = camelCaseHallName("Sunday Long Sit"),
             description = "A two-hour weekend sitting. Arrive when you can; the timer is shared.",
             visibility = HallVisibility.PUBLIC,
             durationSeconds = 7200,
@@ -290,7 +290,7 @@ class HallStore(private val context: Context) {
             Hall(
                 id = h.getString("id"),
                 creatorId = h.getString("creatorId"),
-                name = h.getString("name"),
+                name = camelCaseHallName(h.getString("name")),
                 description = h.getString("description"),
                 visibility = HallVisibility.valueOf(h.getString("visibility")),
                 durationSeconds = h.getInt("durationSeconds"),
@@ -348,7 +348,7 @@ class HallStore(private val context: Context) {
                 userId = l.getString("userId"),
                 sessionId = l.getString("sessionId"),
                 hallId = l.getString("hallId"),
-                hallName = l.getString("hallName"),
+                hallName = camelCaseHallName(l.getString("hallName")),
                 date = LocalDate.parse(l.getString("date")),
                 durationSeconds = l.getInt("durationSeconds"),
                 completionStatus = CompletionStatus.valueOf(l.getString("completionStatus"))

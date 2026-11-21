@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.digital.sanghaworld.hall.HallCard
+import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.hall.ScheduleType
 import com.digital.sanghaworld.ui.SanghaField
 import java.time.Instant
@@ -44,6 +45,7 @@ fun HallDirectoryScreen(
         halls.filter { card ->
             q.isBlank() ||
                 card.hall.name.contains(q, ignoreCase = true) ||
+                camelCaseHallName(card.hall.name).contains(q, ignoreCase = true) ||
                 card.hall.description.contains(q, ignoreCase = true)
         }
     }
@@ -95,7 +97,7 @@ private fun DirectoryCard(card: HallCard, onClick: () -> Unit) {
     ) {
         Row {
             Text(
-                card.hall.name,
+                camelCaseHallName(card.hall.name),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,

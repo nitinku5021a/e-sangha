@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.digital.sanghaworld.hall.HallCard
+import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.logging.DailyTotal
 import java.io.File
 import java.time.DayOfWeek
@@ -309,7 +310,7 @@ private fun ScheduledHalls(halls: List<HallCard>, modifier: Modifier) {
             )
         } else {
             joined.forEach { card ->
-                DayRow(card.hall.name, "${card.hall.durationSeconds / 60} min")
+                DayRow(camelCaseHallName(card.hall.name), "${card.hall.durationSeconds / 60} min")
                 Spacer(Modifier.height(8.dp))
             }
         }

@@ -1,30 +1,54 @@
 package com.digital.sanghaworld.ui.hall
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.hall.ParticipantPresence
-import com.digital.sanghaworld.ui.InitialAvatar
-import com.digital.sanghaworld.ui.QuietButton
-import com.digital.sanghaworld.ui.SanghaScreenPadding
+import kotlinx.coroutines.delay
+
+private val Page = Color(0xFFFCFCFC)
+private val CardBeige = Color(0xFFE8E4DA)
+private val HallPanel = Color(0xFFD5D6CB)
+private val Seat = Color(0xFFC0C5B9)
+private val InkOlive = Color(0xFF465447)
+private val CountOlive = Color(0xFF526650)
+private val Caption = Color(0xFF6E7668)
+private val Forest = Color(0xFF526650)
+private val White = Color(0xFFFFFFFF)
 
 @Composable
 fun CommunitySittingScreen(
-    timeLeftMillis: Long,
     people: List<ParticipantPresence>,
     currentUserId: String?,
     onLeave: () -> Unit,
@@ -33,60 +57,141 @@ fun CommunitySittingScreen(
     val shown = people.distinctBy { it.userId }.ifEmpty {
         listOf(ParticipantPresence(currentUserId ?: "you", "You", com.digital.sanghaworld.hall.DisplayMode.AVATAR))
     }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
     Column(
         modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = SanghaScreenPadding, vertical = 16.dp)
+            .background(Page)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Text(
-            "Open Meditation Hall",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            formatSittingClock(timeLeftMillis),
-            style = MaterialTheme.typography.displaySmall,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Text(
-            "Your time remaining",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(20.dp))
-        Text(
-            if (shown.size == 1) "1 sitting" else "${shown.size} sitting",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.height(8.dp))
-        LazyColumn(Modifier.weight(1f)) {
-            items(shown, key = { it.userId }) { person ->
-                val you = person.userId.equals(currentUserId, ignoreCase = true)
-                Row(
-                    modifier = Modifier
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clip(RoundedCornerShape(22.dp))
+                .background(CardBeige)
+                .padding(14.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "OPEN MEDITATION HALL",
+                    color = InkOlive,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.6.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    if (shown.size == 1) "1 sitting" else "${shown.size} sitting",
+                    color = CountOlive,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            BoxWithConstraints(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(HallPanel)
+                    .padding(10.dp)
+            ) {
+                val columns = if (maxWidth >= 376.dp) 4 else 3
+                Column(
+                    Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    InitialAvatar(person.label, size = 44.dp)
-                    Spacer(Modifier.width(14.dp))
-                    Text(
-                        person.label + if (you) "  ·  You" else "",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    shown.chunked(columns).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { person ->
+                                val you = person.userId.equals(currentUserId, ignoreCase = true)
+                                SittingSeat(
+                                    name = seatName(person.label.ifBlank { if (you) "You" else "Someone" }),
+                                    spent = spentLabel(person.joinedAtMillis, now),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            repeat(columns - row.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
                 }
             }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "LEAVE",
+                color = Forest,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 1.2.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(White)
+                    .clickable(onClick = onLeave)
+                    .padding(vertical = 14.dp)
+            )
         }
-        QuietButton("Leave", onClick = onLeave, modifier = Modifier.fillMaxWidth())
     }
 }
 
-private fun formatSittingClock(millis: Long): String {
-    val totalSec = (millis / 1000).coerceAtLeast(0)
+@Composable
+private fun SittingSeat(name: String, spent: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .height(78.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Seat)
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            name,
+            color = InkOlive,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            spent,
+            color = Caption,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 1
+        )
+    }
+}
+
+private fun seatName(raw: String): String {
+    val parts = raw.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    if (parts.size < 2) return parts.firstOrNull().orEmpty()
+    return parts[0] + " " + parts[1].first().uppercaseChar() + "."
+}
+
+private fun spentLabel(joinedAtMillis: Long, now: Long): String {
+    if (joinedAtMillis <= 0) return "—"
+    val elapsed = now - joinedAtMillis
+    val totalSec = (elapsed / 1000).coerceAtLeast(0)
     val h = totalSec / 3600
     val m = (totalSec % 3600) / 60
     val s = totalSec % 60

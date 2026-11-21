@@ -86,6 +86,7 @@ import com.digital.sanghaworld.audio.GongCatalog
 import com.digital.sanghaworld.audio.GongPreviewPlayer
 import com.digital.sanghaworld.audio.HallGuidedAudioPlayer
 import com.digital.sanghaworld.hall.AudioType
+import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.ui.theme.VipassanaTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -368,7 +369,6 @@ fun VipassanaApp(
         val stopSit = { endSit() }
         if (hallPage == "community") {
             CommunitySittingScreen(
-                timeLeftMillis = timeLeft,
                 people = hallUi.sittingParticipants,
                 currentUserId = hallUi.profile?.id,
                 onLeave = { askCommunityExit = true }
@@ -589,7 +589,7 @@ fun VipassanaApp(
                                             showHalls && hallPage == "info" -> "Hall details"
                                             showHalls && hallPage == "support" -> "Support"
                                             showHalls && hallPage == "logs" -> "Hall log"
-                                            showHalls && hallPage == "community" -> "Open Meditation Hall"
+                                            showHalls && hallPage == "community" -> ""
                                             else -> "Meditation halls"
                                         },
                                         style = MaterialTheme.typography.titleLarge
@@ -665,12 +665,8 @@ fun VipassanaApp(
                         when (hallPage) {
                             "community" -> CommunityRoomScreen(
                                 minutes = communityMinutes,
-                                gongId = communityGong,
+                                sittingCount = hallUi.communityCount,
                                 onMinutes = { communityMinutes = it },
-                                onGong = { id ->
-                                    communityGong = id
-                                    if (id != "none") openingBell.play(GongCatalog.byId(id).resId)
-                                },
                                 onStart = {
                                     hallViewModel.enterCommunity()
                                     val length = communityMinutes * 60_000L
@@ -679,7 +675,6 @@ fun VipassanaApp(
                                         openingBell.play(GongCatalog.byId(communityGong).resId)
                                     }
                                 },
-                                onBack = { hallPage = "home" },
                                 modifier = Modifier.padding(innerPadding)
                             )
                             "create" -> CreateHallScreen(
@@ -703,7 +698,7 @@ fun VipassanaApp(
                                     CreateHallScreen(
                                         title = "Edit hall",
                                         submitLabel = "Save",
-                                        initialName = hall.name,
+                                        initialName = camelCaseHallName(hall.name),
                                         initialDescription = hall.description,
                                         initialDurationMinutes = (hall.durationSeconds / 60).coerceAtLeast(1),
                                         initialHour = schedule?.startLocalTime?.hour ?: 6,
