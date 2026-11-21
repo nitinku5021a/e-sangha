@@ -135,7 +135,8 @@ data class SupportRelationship(
 data class HallDiscovery(
     val sittingNow: List<HallCard>,
     val startingSoon: List<HallCard>,
-    val myHalls: List<HallCard>
+    val myHalls: List<HallCard>,
+    val catalog: List<HallCard> = emptyList()
 )
 
 data class HallCard(
@@ -146,6 +147,20 @@ data class HallCard(
     val participantCount: Int,
     val joined: Boolean
 )
+
+fun camelCaseHallName(raw: String): String {
+    val words = raw.trim()
+        .split(Regex("[^\\p{L}\\p{N}]+"))
+        .flatMap { token ->
+            token.split(Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})"))
+        }
+        .filter { it.isNotEmpty() }
+    if (words.isEmpty()) return "untitledHall"
+    return words.mapIndexed { index, part ->
+        val lower = part.lowercase()
+        if (index == 0) lower else lower.replaceFirstChar { it.titlecase() }
+    }.joinToString("")
+}
 
 object HallIds {
     fun newId(): String = UUID.randomUUID().toString()

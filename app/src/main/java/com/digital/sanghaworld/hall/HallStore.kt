@@ -48,7 +48,7 @@ class HallStore(private val context: Context) {
             .sortedBy { it.nextStartMillis }
             .take(8)
         val mine = cards.filter { it.joined }.sortedBy { it.nextStartMillis }
-        return HallDiscovery(sitting, soon, mine)
+        return HallDiscovery(sitting, soon, mine, cards.sortedBy { it.hall.name.lowercase() })
     }
 
     fun nextOccurrence(schedule: HallSchedule, durationSeconds: Int, nowMillis: Long): Long? {

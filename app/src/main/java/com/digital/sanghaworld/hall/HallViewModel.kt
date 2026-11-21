@@ -37,7 +37,8 @@ data class HallUiState(
     val actionError: String? = null,
     val suppressAutoSitKey: String? = null,
     val seats: List<MeditationSeat> = emptyList(),
-    val meditating: Boolean = false
+    val meditating: Boolean = false,
+    val communityCount: Int = 0
 )
 
 class HallViewModel(application: Application) : AndroidViewModel(application) {
@@ -79,6 +80,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun remoteUi(selectedId: String? = _state.value.selectedHall?.id): HallUiState {
         val disc = api.halls()
+        val communityCount = runCatching { api.communityPeople().size }.getOrDefault(0)
         val logs = runCatching { api.logs() }.getOrDefault(emptyList())
         val reqs = runCatching { api.listSupportRequests() }.getOrDefault(emptyList())
         val rels = runCatching { api.relationships() }.getOrDefault(emptyList())
@@ -119,7 +121,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             actionError = _state.value.actionError,
             suppressAutoSitKey = _state.value.suppressAutoSitKey,
             seats = _state.value.seats,
-            meditating = _state.value.meditating
+            meditating = _state.value.meditating,
+            communityCount = communityCount
         )
     }
 
@@ -281,19 +284,20 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         audioDurationSeconds: Int? = null,
         onCreated: (String?, Boolean) -> Unit = { _, _ -> }
     ) {
+        val hallName = camelCaseHallName(name)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     connectRemote()
                     if (useRemote) {
                         api.createHall(
-                            name, description, durationMinutes, hour, minute,
+                            hallName, description, durationMinutes, hour, minute,
                             scheduleType, days, visibility, audioType,
                             audioUrl, audioFileName, audioDurationSeconds
                         )
                     } else {
                         createHallLocal(
-                            name, description, durationMinutes, hour, minute,
+                            hallName, description, durationMinutes, hour, minute,
                             scheduleType, days, visibility, audioType,
                             audioUrl, audioFileName, audioDurationSeconds
                         )
@@ -369,7 +373,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             val hall = Hall(
                 id = hallId,
                 creatorId = s.profile.id,
-                name = name.trim().ifBlank { "Untitled hall" },
+                name = name,
                 description = description.trim(),
                 visibility = visibility,
                 durationSeconds = (durationMinutes.coerceIn(1, 720)) * 60,
@@ -414,13 +418,14 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         audioDurationSeconds: Int? = null,
         onDone: (Boolean) -> Unit = {}
     ) {
+        val hallName = camelCaseHallName(name)
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
                     connectRemote()
                     if (useRemote) {
                         api.updateHall(
-                            hallId, name, description, durationMinutes, hour, minute,
+                            hallId, hallName, description, durationMinutes, hour, minute,
                             scheduleType, days, visibility, audioType,
                             audioUrl, audioFileName, audioDurationSeconds
                         )
@@ -431,7 +436,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                                 halls = s.halls.map { hall ->
                                     if (hall.id != hallId) hall
                                     else hall.copy(
-                                        name = name.trim().ifBlank { "Untitled hall" },
+                                        name = hallName,
                                         description = description.trim(),
                                         durationSeconds = durationMinutes.coerceIn(1, 720) * 60,
                                         visibility = visibility,

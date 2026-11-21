@@ -51,7 +51,7 @@ fun CommunityRoomScreen(
             .padding(horizontal = SanghaScreenPadding, vertical = 12.dp)
     ) {
         Text(
-            "Community Room",
+            "Open Meditation Hall",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground
         )

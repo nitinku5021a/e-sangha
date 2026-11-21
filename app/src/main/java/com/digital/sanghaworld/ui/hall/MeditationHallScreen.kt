@@ -133,11 +133,11 @@ fun MeditationHallScreen(
                         .align(Alignment.TopEnd)
                         .padding(12.dp)
                         .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFFFFF6E0))
+                        .background(Color(0xFFF6F5F2))
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     horizontalAlignment = Alignment.End
                 ) {
-                    Text("REMAINING", color = Color(0xFF8C4E12), style = MaterialTheme.typography.labelSmall)
+                    Text("REMAINING", color = Color(0xFF2C3340), style = MaterialTheme.typography.labelSmall)
                     Text(formatClock(timeLeftMillis), color = Ink, style = MaterialTheme.typography.headlineSmall)
                 }
             }
@@ -147,11 +147,11 @@ fun MeditationHallScreen(
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 28.dp, vertical = 24.dp)
                         .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xFFFFF6E0))
+                        .background(Color(0xFFF6F5F2))
                         .padding(horizontal = 28.dp, vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("MEDITATION STARTS IN", color = Color(0xFF8C4E12), style = MaterialTheme.typography.labelSmall)
+                    Text("MEDITATION STARTS IN", color = Color(0xFF2C3340), style = MaterialTheme.typography.labelSmall)
                     Spacer(Modifier.height(4.dp))
                     Text(formatClock(untilStart), color = Ink, style = MaterialTheme.typography.displaySmall)
                     Spacer(Modifier.height(2.dp))
@@ -205,7 +205,7 @@ fun MeditationHallScreen(
             if (onPreviewAudio != null) {
                 Text(
                     "Preview audio",
-                    color = Color(0xFF8C4E12),
+                    color = Color(0xFF2C3340),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)

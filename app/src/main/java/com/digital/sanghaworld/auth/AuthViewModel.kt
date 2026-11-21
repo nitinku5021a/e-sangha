@@ -89,6 +89,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(error = null)
     }
 
+    fun updateDisplayName(name: String) {
+        val trimmed = name.trim().take(120)
+        if (trimmed.isBlank()) return
+        tokens.displayName = trimmed
+        _state.value = _state.value.copy(displayName = trimmed)
+    }
+
     private fun restore(): Boolean {
         if (!tokens.isSignedIn()) return false
         return runCatching { api.me() }.isSuccess || runCatching { api.refreshSession() }.isSuccess

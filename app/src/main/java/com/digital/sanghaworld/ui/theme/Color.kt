@@ -2,19 +2,39 @@ package com.digital.sanghaworld.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val WarmGold = Color(0xFFE2A322)
-val WarmGoldDeep = Color(0xFFC45C12)
-val Parchment = Color(0xFFFFF6E8)
-val CreamSurface = Color(0xFFFFFCF6)
-val Ink = Color(0xFF2C2116)
-val InkMuted = Color(0xFF6B5340)
+val Paper = Color(0xFFF6F5F2)
+val Ink = Color(0xFF1A1A1A)
+val InkMuted = Color(0xFF6F6B66)
+val Indigo = Color(0xFF2C3340)
+val IndigoSoft = Color(0xFF4A5160)
+val White = Color(0xFFFFFFFF)
+val StoneLine = Color(0xFFE4E1DB)
 
-val DarkBackground = Color(0xFF1A140E)
-val DarkSurface = Color(0xFF261C14)
-val TextLight = Color(0xFFFFF3E0)
-val TextLightMuted = Color(0xFFE4C9A4)
+val Limestone = Paper
+val WarmStone = White
+val Taupe = StoneLine
+val Bronze = Indigo
+val Charcoal = Ink
+val Cream = Paper
+val Sage = White
+val ForestGreen = Indigo
+val Sand = StoneLine
 
-val Forest = Color(0xFFC47A12)
-val ForestSoft = Color(0xFF8C4E12)
-val HallCream = Color(0xFFFFF6E8)
-val ErrorWarm = Color(0xFF9B4034)
+val Pine = Indigo
+val PineDeep = Ink
+val Mist = Paper
+val WarmGold = Indigo
+val WarmGoldDeep = Indigo
+val Parchment = Paper
+val CreamSurface = White
+val Stone = White
+
+val DarkBackground = Ink
+val DarkSurface = Color(0xFF242424)
+val TextLight = Paper
+val TextLightMuted = Color(0xFFB7B3AD)
+
+val Forest = Indigo
+val ForestSoft = IndigoSoft
+val HallCream = Paper
+val ErrorWarm = Color(0xFF8C3E3A)

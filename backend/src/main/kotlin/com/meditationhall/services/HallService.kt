@@ -70,13 +70,14 @@ class HallService {
         HallsResponse(
             sittingNow = cards.filter { it.remainingSeconds != null }.sortedBy { it.remainingSeconds },
             startingSoon = cards.filter { it.remainingSeconds == null }.sortedBy { it.nextStartMillis ?: Long.MAX_VALUE }.take(12),
-            myHalls = cards.filter { it.joined }.sortedBy { it.nextStartMillis ?: Long.MAX_VALUE }
+            myHalls = cards.filter { it.joined }.sortedBy { it.nextStartMillis ?: Long.MAX_VALUE },
+            catalog = cards.sortedBy { it.name.lowercase() }
         )
     }
 
     fun get(userId: UUID, hallId: UUID): HallDto {
         val list = list(userId)
-        return (list.sittingNow + list.startingSoon + list.myHalls).firstOrNull { it.id == hallId.toString() }
+        return list.catalog.firstOrNull { it.id == hallId.toString() }
             ?: throw ApiException(HttpStatusCode.NotFound, "HALL_NOT_FOUND", "Hall not found.")
     }
 
@@ -87,7 +88,7 @@ class HallService {
         Halls.insert {
             it[id] = hallId
             it[creatorId] = userId
-            it[name] = body.name.trim().ifBlank { "Untitled hall" }
+            it[name] = camelCaseName(body.name)
             it[description] = body.description
             it[visibility] = body.visibility
             it[durationSeconds] = body.durationMinutes.coerceIn(1, 720) * 60
@@ -143,7 +144,7 @@ class HallService {
                 throw ApiException(HttpStatusCode.BadRequest, "INVALID_SCHEDULE", "Unknown schedule type.")
             }
             Halls.update({ Halls.id eq hallId }) {
-                body.name?.let { n -> it[name] = n.trim().ifBlank { "Untitled hall" } }
+                body.name?.let { n -> it[name] = camelCaseName(n) }
                 body.description?.let { d -> it[description] = d }
                 body.durationMinutes?.let { m -> it[durationSeconds] = m.coerceIn(1, 720) * 60 }
                 visibility?.let { v -> it[Halls.visibility] = v }
@@ -263,5 +264,19 @@ class HallService {
 
     fun scheduleFor(hallId: UUID) = transaction {
         HallSchedules.selectAll().firstOrNull { it[HallSchedules.hallId] == hallId }
+    }
+
+    private fun camelCaseName(raw: String): String {
+        val words = raw.trim()
+            .split(Regex("[^\\p{L}\\p{N}]+"))
+            .flatMap { token ->
+                token.split(Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})"))
+            }
+            .filter { it.isNotEmpty() }
+        if (words.isEmpty()) return "untitledHall"
+        return words.mapIndexed { index, part ->
+            val lower = part.lowercase()
+            if (index == 0) lower else lower.replaceFirstChar { it.titlecase() }
+        }.joinToString("")
     }
 }

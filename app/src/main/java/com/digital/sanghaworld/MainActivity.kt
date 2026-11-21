@@ -21,17 +21,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,19 +61,22 @@ import com.digital.sanghaworld.ui.AwarenessRunningScreen
 import com.digital.sanghaworld.ui.AwarenessSetupScreen
 import com.digital.sanghaworld.ui.CompletionScreen
 import com.digital.sanghaworld.ui.DrawerMenuItem
-import com.digital.sanghaworld.ui.SanghaMark
 import com.digital.sanghaworld.billing.DonationViewModel
 import com.digital.sanghaworld.ui.SupportScreen
 import com.digital.sanghaworld.auth.AuthViewModel
 import com.digital.sanghaworld.hall.HallViewModel
 import com.digital.sanghaworld.hall.SittingAlarms
 import com.digital.sanghaworld.hall.ScheduleType
+import com.digital.sanghaworld.logging.MeditationLogStore
 import com.digital.sanghaworld.ui.LoginScreen
+import com.digital.sanghaworld.ui.MySpaceScreen
+import com.digital.sanghaworld.ui.ProfileStore
 import com.digital.sanghaworld.ui.TimerScreen
 import com.digital.sanghaworld.ui.hall.CommunitySupportScreen
 import com.digital.sanghaworld.ui.hall.CommunityRoomScreen
 import com.digital.sanghaworld.ui.hall.CommunitySittingScreen
 import com.digital.sanghaworld.ui.hall.CreateHallScreen
+import com.digital.sanghaworld.ui.hall.HallDirectoryScreen
 import com.digital.sanghaworld.ui.hall.HallDetailScreen
 import com.digital.sanghaworld.ui.hall.HallLogScreen
 import com.digital.sanghaworld.ui.hall.HallSittingScreen
@@ -157,7 +161,21 @@ fun VipassanaApp(
     var showAwareness by remember { mutableStateOf(false) }
     var showSupport by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-    var hallMenuOpen by remember { mutableStateOf(false) }
+    var showProfile by remember { mutableStateOf(false) }
+    var profilePage by remember { mutableStateOf("home") }
+    var photoVersion by remember { mutableStateOf(0) }
+    val profilePhoto = remember(photoVersion) {
+        ProfileStore.photoFile(context).takeIf { it.exists() }
+    }
+    val practiceLogs = remember(showProfile, profilePage) {
+        MeditationLogStore.loadDailyTotals(context)
+    }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            ProfileStore.savePhoto(context, uri)
+            photoVersion += 1
+        }
+    }
     var openJoinCode by remember { mutableStateOf(false) }
     var hallPage by remember { mutableStateOf("home") }
     var communityMinutes by remember { mutableStateOf(30) }
@@ -218,6 +236,8 @@ fun VipassanaApp(
         showAwareness = false
         showSupport = false
         showSettings = false
+        showProfile = false
+        profilePage = "home"
         showHalls = true
         hallPage = "home"
         hallViewModel.refresh()
@@ -266,11 +286,13 @@ fun VipassanaApp(
         hallFocus = false
     }
 
-    val onNestedScreen = showAwareness || showSupport || showSettings || (showHalls && hallPage != "home")
+    val onNestedScreen = showProfile || showAwareness || showSupport || showSettings || (showHalls && hallPage != "home")
     val onMainScreen = !isRunning && !isAwarenessRunning && !hasCompleted && !onNestedScreen
     BackHandler(enabled = isRunning || isAwarenessRunning || hasCompleted || onNestedScreen || onMainScreen) {
         when {
             onMainScreen -> askQuitApp = true
+            showProfile && profilePage != "home" -> profilePage = "home"
+            showProfile -> showHome()
             hallPage == "community" -> askCommunityExit = true
             isRunning && hallPage == "info" -> hallPage = "detail"
             isRunning -> endSit()
@@ -311,7 +333,7 @@ fun VipassanaApp(
     if (askCommunityExit) {
         AlertDialog(
             onDismissRequest = { askCommunityExit = false },
-            title = { Text("Leave the Community Room?") },
+            title = { Text("Leave the Open Meditation Hall?") },
             text = { Text("You can stay, leave the room, or quit the app. Your sit ends if you leave or quit.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -435,18 +457,12 @@ fun VipassanaApp(
                         modifier = Modifier.fillMaxHeight(),
                         drawerContainerColor = MaterialTheme.colorScheme.background
                     ) {
-                        Row(
-                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 36.dp, bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            SanghaMark(size = 52.dp)
-                            Spacer(Modifier.width(14.dp))
-                            Text(
-                                text = "Sangha",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
+                        Text(
+                            text = "Sangha",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 36.dp, bottom = 8.dp)
+                        )
                         Text(
                             text = "A quiet place to sit together",
                             style = MaterialTheme.typography.bodyMedium,
@@ -462,13 +478,14 @@ fun VipassanaApp(
                         DrawerMenuItem(
                             title = "Meditation halls",
                             icon = Icons.Outlined.Groups,
-                            selected = showHalls,
+                            selected = showHalls && hallPage == "home" && !showProfile,
                             onClick = {
                                 showHalls = true
                                 showLog = false
                                 showAwareness = false
                                 showSupport = false
                                 showSettings = false
+                                showProfile = false
                                 hallPage = "home"
                                 hallViewModel.refresh()
                                 scope.launch { drawerState.close() }
@@ -484,6 +501,38 @@ fun VipassanaApp(
                                 showSupport = false
                                 showSettings = false
                                 showHalls = false
+                                showProfile = false
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+                        DrawerMenuItem(
+                            title = "Join with code",
+                            icon = Icons.Outlined.Link,
+                            selected = false,
+                            onClick = {
+                                showHalls = true
+                                showLog = false
+                                showAwareness = false
+                                showSupport = false
+                                showSettings = false
+                                showProfile = false
+                                hallPage = "home"
+                                openJoinCode = true
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+                        DrawerMenuItem(
+                            title = "Support",
+                            icon = Icons.Outlined.VolunteerActivism,
+                            selected = showHalls && hallPage == "support",
+                            onClick = {
+                                showHalls = true
+                                showLog = false
+                                showAwareness = false
+                                showSupport = false
+                                showSettings = false
+                                showProfile = false
+                                hallPage = "support"
                                 scope.launch { drawerState.close() }
                             }
                         )
@@ -503,6 +552,7 @@ fun VipassanaApp(
                                 showAwareness = false
                                 showSettings = false
                                 showHalls = false
+                                showProfile = false
                                 scope.launch { drawerState.close() }
                             }
                         )
@@ -524,55 +574,51 @@ fun VipassanaApp(
                         if (!(showHalls && hallPage == "detail")) {
                             TopAppBar(
                                 title = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        SanghaMark(size = 28.dp)
-                                        Spacer(Modifier.width(10.dp))
-                                        Text(
+                                    Text(
                                         when {
+                                            showProfile && profilePage == "practice" -> "My Practice"
+                                            showProfile && profilePage == "halls" -> "My Scheduled Halls"
+                                            showProfile && profilePage == "reminders" -> "Reminders"
+                                            showProfile && profilePage == "settings" -> "Settings"
+                                            showProfile -> "My Space"
                                             showAwareness -> "Be aware always"
                                             showSupport -> "Donate"
+                                            showHalls && hallPage == "directory" -> "Scheduled halls"
                                             showHalls && hallPage == "create" -> "Create a hall"
                                             showHalls && hallPage == "edit" -> "Edit hall"
                                             showHalls && hallPage == "info" -> "Hall details"
                                             showHalls && hallPage == "support" -> "Support"
                                             showHalls && hallPage == "logs" -> "Hall log"
-                                            showHalls && hallPage == "community" -> "Community Room"
+                                            showHalls && hallPage == "community" -> "Open Meditation Hall"
                                             else -> "Meditation halls"
                                         },
                                         style = MaterialTheme.typography.titleLarge
-                                        )
-                                    }
+                                    )
                                 },
                                 navigationIcon = {
-                                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                    if (showProfile) {
+                                        IconButton(onClick = {
+                                            if (profilePage != "home") profilePage = "home" else showHome()
+                                        }) {
+                                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                                        }
+                                    } else if (showHalls && hallPage != "home" && hallPage != "detail") {
+                                        IconButton(onClick = { hallPage = "home"; hallViewModel.refresh() }) {
+                                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                                        }
+                                    } else {
+                                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                        }
                                     }
                                 },
                                 actions = {
-                                    if (showHalls && hallPage == "home") {
-                                        IconButton(onClick = { hallMenuOpen = true }) {
-                                            Icon(Icons.Outlined.MoreVert, contentDescription = "Hall actions")
-                                        }
-                                        DropdownMenu(
-                                            expanded = hallMenuOpen,
-                                            onDismissRequest = { hallMenuOpen = false }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("Create a hall") },
-                                                onClick = { hallMenuOpen = false; hallPage = "create" }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Join with code") },
-                                                onClick = { hallMenuOpen = false; openJoinCode = true }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Support") },
-                                                onClick = { hallMenuOpen = false; hallPage = "support" }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Hall log") },
-                                                onClick = { hallMenuOpen = false; hallPage = "logs" }
-                                            )
+                                    if (showHalls && hallPage == "home" && !showProfile && !showSupport && !showAwareness && !showSettings) {
+                                        IconButton(onClick = {
+                                            profilePage = "home"
+                                            showProfile = true
+                                        }) {
+                                            Icon(Icons.Outlined.Person, contentDescription = "My Space")
                                         }
                                     }
                                 },
@@ -591,6 +637,22 @@ fun VipassanaApp(
                                 val durationMillis = hours.toLong() * 60 * 60 * 1000
                                 val intervalMillis = intervalMinutes.toLong() * 60 * 1000
                                 viewModel.startAwareness(context, durationMillis, intervalMillis)
+                            },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    } else if (showProfile) {
+                        MySpaceScreen(
+                            displayName = authState.displayName.orEmpty(),
+                            photo = profilePhoto,
+                            logs = practiceLogs,
+                            halls = hallUi.discovery.myHalls,
+                            page = profilePage,
+                            onOpen = { profilePage = it },
+                            onName = { authViewModel.updateDisplayName(it) },
+                            onAddPhoto = { pickPhoto.launch("image/*") },
+                            onRemovePhoto = {
+                                ProfileStore.clearPhoto(context)
+                                photoVersion += 1
                             },
                             modifier = Modifier.padding(innerPadding)
                         )
@@ -780,6 +842,17 @@ fun VipassanaApp(
                                 onBack = { hallPage = "home" },
                                 modifier = Modifier.padding(innerPadding)
                             )
+                            "directory" -> HallDirectoryScreen(
+                                halls = hallUi.discovery.catalog.ifEmpty {
+                                    (hallUi.discovery.sittingNow + hallUi.discovery.startingSoon + hallUi.discovery.myHalls)
+                                        .distinctBy { it.hall.id }
+                                },
+                                onOpen = { card ->
+                                    hallViewModel.openHall(card.hall.id)
+                                    hallPage = "info"
+                                },
+                                modifier = Modifier.padding(innerPadding)
+                            )
                             "logs" -> HallLogScreen(
                                 ui = hallUi,
                                 onBack = { hallPage = "home" },
@@ -787,6 +860,11 @@ fun VipassanaApp(
                             )
                             else -> HallsHomeScreen(
                                 ui = hallUi,
+                                onCreateHall = { hallPage = "create" },
+                                onBrowseHalls = {
+                                    hallViewModel.refresh()
+                                    hallPage = "directory"
+                                },
                                 onOpenCommunity = {
                                     hallPage = "community"
                                     hallViewModel.refreshCommunity()

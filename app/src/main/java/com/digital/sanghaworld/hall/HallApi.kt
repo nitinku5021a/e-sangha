@@ -74,7 +74,8 @@ class HallApi(
         return HallDiscovery(
             sittingNow = parseCards(res.optJSONArray("sittingNow")),
             startingSoon = parseCards(res.optJSONArray("startingSoon")),
-            myHalls = parseCards(res.optJSONArray("myHalls"))
+            myHalls = parseCards(res.optJSONArray("myHalls")),
+            catalog = parseCards(res.optJSONArray("catalog"))
         )
     }
 

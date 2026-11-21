@@ -42,10 +42,10 @@ val SanghaScreenPadding = 24.dp
 fun SanghaMark(modifier: Modifier = Modifier, size: Dp = 48.dp) {
     Canvas(modifier.size(size)) {
         val r = this.size.minDimension / 2f
-        drawCircle(color = Color(0xFFE8A23A), radius = r)
-        drawCircle(color = Color(0xFFFFF6E0), radius = r * 0.72f)
-        drawCircle(color = Color(0xFFE26A1E), radius = r * 0.34f)
-        drawCircle(color = Color(0xFFFFF6E0), radius = r * 0.12f)
+        drawCircle(color = Color(0xFF2C3340), radius = r)
+        drawCircle(color = Color(0xFFF6F5F2), radius = r * 0.72f)
+        drawCircle(color = Color(0xFF1A1A1A), radius = r * 0.34f)
+        drawCircle(color = Color(0xFFF6F5F2), radius = r * 0.12f)
     }
 }
 
@@ -104,7 +104,7 @@ fun DrawerMenuItem(
         MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f)
     }
     val bg = if (selected) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+        MaterialTheme.colorScheme.surface
     } else {
         Color.Transparent
     }
@@ -235,11 +235,11 @@ fun ChoiceChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-    else MaterialTheme.colorScheme.surface
+    val bg = if (selected) MaterialTheme.colorScheme.surface
+    else MaterialTheme.colorScheme.background
     val fg = if (selected) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-    val border = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+    else MaterialTheme.colorScheme.onSurface
+    val border = if (selected) MaterialTheme.colorScheme.primary
     else MaterialTheme.colorScheme.outline
     Box(
         modifier = modifier

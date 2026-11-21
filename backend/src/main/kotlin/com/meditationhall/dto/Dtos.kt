@@ -105,7 +105,8 @@ data class HallDto(
 data class HallsResponse(
     val sittingNow: List<HallDto>,
     val startingSoon: List<HallDto>,
-    val myHalls: List<HallDto>
+    val myHalls: List<HallDto>,
+    val catalog: List<HallDto> = emptyList()
 )
 
 @Serializable

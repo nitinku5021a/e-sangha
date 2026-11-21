@@ -1,8 +1,9 @@
 package com.digital.sanghaworld.ui.hall
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,9 +11,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,24 +29,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import com.digital.sanghaworld.hall.HallCard
-import com.digital.sanghaworld.hall.HallUiState
-import com.digital.sanghaworld.hall.ScheduleType
-import java.time.DayOfWeek
-import com.digital.sanghaworld.ui.SanghaField
-import com.digital.sanghaworld.ui.StatusText
+import androidx.compose.ui.text.style.TextOverflow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import androidx.compose.ui.unit.dp
+import com.digital.sanghaworld.hall.HallCard
+import com.digital.sanghaworld.hall.HallUiState
+import com.digital.sanghaworld.ui.SanghaField
+import com.digital.sanghaworld.ui.StatusText
 
 @Composable
 fun HallsHomeScreen(
     ui: HallUiState,
     onOpenHall: (HallCard) -> Unit,
     onOpenCommunity: () -> Unit = {},
+    onCreateHall: () -> Unit = {},
+    onBrowseHalls: () -> Unit = {},
     onJoinCode: (String) -> Unit,
     openJoinCode: Boolean = false,
     onJoinCodeConsumed: () -> Unit = {},
@@ -58,15 +63,9 @@ fun HallsHomeScreen(
         }
     }
 
-    val rooms = remember(ui.discovery) {
-        (ui.discovery.sittingNow + ui.discovery.startingSoon + ui.discovery.myHalls)
-            .distinctBy { it.hall.id }
-            .sortedWith(
-            compareBy<HallCard> { !it.joined }
-                .thenBy { it.remainingSeconds == null }
-                .thenBy { it.nextStartMillis }
-        )
-    }
+    val mine = ui.discovery.myHalls
+        .distinctBy { it.hall.id }
+        .sortedBy { it.nextStartMillis }
 
     LazyColumn(
             modifier = modifier
@@ -83,34 +82,15 @@ fun HallsHomeScreen(
                 }
             }
             item {
-                Text(
-                    "ALWAYS OPEN",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
-                )
-                CommunityRoomRow(onClick = onOpenCommunity)
-                Text(
-                    "SCHEDULED HALLS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 4.dp)
-                )
-                if (rooms.isEmpty()) {
-                    Text(
-                        "No scheduled halls yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                    )
+                Spacer(Modifier.height(12.dp))
+                OpenHallCard(count = ui.communityCount, onEnter = onOpenCommunity)
+                Spacer(Modifier.height(14.dp))
+                ScheduleHallCard(onBrowse = onBrowseHalls, onCreate = onCreateHall)
+                if (mine.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    MyHallsCard(halls = mine, onOpen = onOpenHall)
                 }
-            }
-            items(rooms, key = { it.hall.id }) { card ->
-                HallRoomRow(
-                    card,
-                    onClick = { onOpenHall(card) },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                )
+                Spacer(Modifier.height(24.dp))
             }
         }
 
@@ -143,105 +123,147 @@ fun HallsHomeScreen(
     }
 }
 
-private fun frequencyLabel(card: HallCard): String {
-    val schedule = card.schedule
-    return when (schedule.scheduleType) {
-        ScheduleType.ONCE -> "Once"
-        ScheduleType.DAILY -> "Daily"
-        ScheduleType.WEEKLY -> "Weekly"
-        ScheduleType.WEEKDAYS -> "Weekdays"
-        ScheduleType.CUSTOM -> {
-            val days = schedule.daysOfWeek.sortedBy { it.value }
-            if (days.isEmpty()) "Custom" else days.joinToString(", ") { it.shortName() }
+@Composable
+private fun OpenHallCard(count: Int, onEnter: () -> Unit) {
+    MainCard {
+        Text(
+            "Open Meditation Hall",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Open all day. Your timer, your bell.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
+        )
+        Spacer(Modifier.height(16.dp))
+        LiveCount(count, onDark = false)
+        Spacer(Modifier.height(18.dp))
+        LoudButton("Enter Hall", onEnter)
+    }
+}
+
+@Composable
+private fun ScheduleHallCard(onBrowse: () -> Unit, onCreate: () -> Unit) {
+    MainCard {
+        Text(
+            "Schedule Meditation Hall",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Sit with others at a set time, or open a hall of your own.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
+        )
+        Spacer(Modifier.height(18.dp))
+        LoudButton("Scheduled halls", onBrowse)
+        Spacer(Modifier.height(10.dp))
+        LoudButton("Create a meditation hall", onCreate)
+    }
+}
+
+@Composable
+private fun MyHallsCard(halls: List<HallCard>, onOpen: (HallCard) -> Unit) {
+    MainCard {
+        Text(
+            "My Meditation Halls",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(14.dp))
+        halls.forEach { card ->
+            JoinedHallRow(card, onClick = { onOpen(card) })
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
-private fun DayOfWeek.shortName(): String =
-    name.lowercase().replaceFirstChar { it.titlecase() }.take(3)
-
 @Composable
-private fun CommunityRoomRow(onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 18.dp)
-    ) {
-        Text(
-            "Community Room",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onPrimary
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Open all day. Your own timer and bell. Names of who is sitting are shared.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onPrimary
-        )
-    }
-}
-
-@Composable
-private fun HallRoomRow(card: HallCard, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun JoinedHallRow(card: HallCard, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
     val localStart = Instant.ofEpochMilli(card.nextStartMillis).atZone(ZoneId.systemDefault())
     val whenLabel = localStart.format(DateTimeFormatter.ofPattern("EEE")) + " " +
         localStart.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
-    val sitting = card.remainingSeconds != null
-    val frequency = frequencyLabel(card)
-    val detail = if (sitting) {
-        val minutes = (card.remainingSeconds / 60).coerceAtLeast(0)
-        "$whenLabel · $frequency · ${card.participantCount} sitting · ${minutes}m left"
-    } else {
-        "$whenLabel · $frequency · ${card.participantCount} expected"
-    }
-    Row(
-        modifier = modifier
+    Column(
+        modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .clip(shape)
+            .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+            .background(MaterialTheme.colorScheme.background)
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                card.hall.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(Modifier.height(3.dp))
-            Text(
-                detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                if (card.joined) "Joined" else "Open",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (card.joined) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        if (card.joined) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            )
-            if (sitting) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    "Now",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+        Text(
+            card.hall.name,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            whenLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
+        )
     }
 }
+
+@Composable
+private fun MainCard(content: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(22.dp)
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 20.dp, vertical = 22.dp)
+    ) { content() }
+}
+
+@Composable
+private fun LoudButton(label: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Text(
+        label,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onPrimary,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp)
+    )
+}
+
+@Composable
+private fun LiveCount(count: Int, onDark: Boolean) {
+    val dot = if (count > 0) {
+        if (onDark) Color(0xFFF6F5F2) else MaterialTheme.colorScheme.primary
+    } else {
+        if (onDark) Color(0xFFF6F5F2).copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline
+    }
+    val label = if (count == 1) "1 sitting" else "$count sitting"
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(dot)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (onDark) Color(0xFFF6F5F2) else MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+
