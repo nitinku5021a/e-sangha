@@ -76,6 +76,7 @@ class TimerService : Service() {
         const val ACTION_STOP = "com.digital.sanghaworld.STOP"
         const val EXTRA_DURATION = "com.digital.sanghaworld.DURATION"
         const val EXTRA_SKIP_PREP = "com.digital.sanghaworld.SKIP_PREP"
+        const val EXTRA_OPEN_TIMER = "com.digital.sanghaworld.OPEN_TIMER"
         const val ACTION_START_AWARENESS = "com.digital.sanghaworld.START_AWARENESS"
         const val ACTION_STOP_AWARENESS = "com.digital.sanghaworld.STOP_AWARENESS"
         const val EXTRA_AWARENESS_DURATION = "com.digital.sanghaworld.AWARENESS_DURATION"
@@ -433,7 +434,8 @@ class TimerService : Service() {
 
     private fun createNotification(content: String): Notification {
         val intent = Intent(this, com.digital.sanghaworld.MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_OPEN_TIMER, true)
         }
         val pendingIntent = android.app.PendingIntent.getActivity(
             this, 0, intent,

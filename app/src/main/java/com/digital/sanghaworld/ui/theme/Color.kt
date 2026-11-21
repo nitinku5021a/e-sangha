@@ -2,13 +2,15 @@ package com.digital.sanghaworld.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Paper = Color(0xFFF6F5F2)
-val Ink = Color(0xFF1A1A1A)
-val InkMuted = Color(0xFF6F6B66)
-val Indigo = Color(0xFF2C3340)
-val IndigoSoft = Color(0xFF4A5160)
+val Paper = Color(0xFFF4F1E8)
+val Ink = Color(0xFF344334)
+val InkMuted = Color(0xFF6E7664)
+val Indigo = Color(0xFF526650)
+val IndigoSoft = Color(0xFF6E8468)
 val White = Color(0xFFFFFFFF)
-val StoneLine = Color(0xFFE4E1DB)
+val StoneLine = Color(0xFFD9D3C6)
+val Sage = Color(0xFFDDE3D7)
+val Sand = Color(0xFFE9E3D8)
 
 val Limestone = Paper
 val WarmStone = White
@@ -16,9 +18,7 @@ val Taupe = StoneLine
 val Bronze = Indigo
 val Charcoal = Ink
 val Cream = Paper
-val Sage = White
 val ForestGreen = Indigo
-val Sand = StoneLine
 
 val Pine = Indigo
 val PineDeep = Ink

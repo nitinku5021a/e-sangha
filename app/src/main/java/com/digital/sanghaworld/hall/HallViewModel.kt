@@ -38,7 +38,9 @@ data class HallUiState(
     val suppressAutoSitKey: String? = null,
     val seats: List<MeditationSeat> = emptyList(),
     val meditating: Boolean = false,
-    val communityCount: Int = 0
+    val communityCount: Int = 0,
+    val communityPeople: List<ParticipantPresence> = emptyList(),
+    val inOpenHall: Boolean = false
 )
 
 class HallViewModel(application: Application) : AndroidViewModel(application) {
@@ -123,7 +125,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             suppressAutoSitKey = _state.value.suppressAutoSitKey,
             seats = _state.value.seats,
             meditating = _state.value.meditating,
-            communityCount = communityCount
+            communityCount = communityCount,
+            communityPeople = _state.value.communityPeople,
+            inOpenHall = _state.value.inOpenHall
         )
     }
 
@@ -141,6 +145,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
 
     fun enterCommunity() {
         if (localCommunityJoinedAt == 0L) localCommunityJoinedAt = System.currentTimeMillis()
+        _state.value = _state.value.copy(inOpenHall = true)
         viewModelScope.launch {
             val remote = withContext(Dispatchers.IO) {
                 runCatching {
@@ -148,7 +153,6 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                     if (useRemote) api.communityJoin() else emptyList()
                 }.getOrDefault(emptyList())
             }
-            joinMeditation()
             applyCommunity(remote)
         }
     }
@@ -163,7 +167,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
 
     fun leaveCommunity() {
         localCommunityJoinedAt = 0
-        leaveMeditationSeat()
+        _state.value = _state.value.copy(inOpenHall = false)
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { if (useRemote) api.communityLeave() }
         }
@@ -185,7 +189,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             )
         }.distinctBy { it.userId.lowercase() }
         val incomingById = incoming.associateBy { it.userId.lowercase() }
-        val previous = _state.value.sittingParticipants
+        val previous = _state.value.communityPeople
         val kept = previous.mapNotNull { incomingById[it.userId.lowercase()] }
         val keptIds = kept.map { it.userId.lowercase() }.toSet()
         val people = (kept + incoming.filter { it.userId.lowercase() !in keptIds }).toMutableList()
@@ -193,7 +197,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             it.userId.equals(me.id, ignoreCase = true) ||
                 it.label.equals(me.displayName, ignoreCase = true)
         }
-        if (_state.value.meditating && me != null && !listed && remote.isEmpty()) {
+        if (_state.value.inOpenHall && me != null && !listed && remote.isEmpty()) {
             people += ParticipantPresence(
                 me.id,
                 me.displayName.ifBlank { "You" },
@@ -202,11 +206,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         _state.value = _state.value.copy(
-            sittingParticipants = people,
-            selectedParticipantCount = people.size,
+            communityPeople = people,
             communityCount = people.size
         )
-        prepareHallScene()
     }
 
     fun prepareHallScene() {
@@ -580,6 +582,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                         ),
                         sittingParticipants = people
                     )
+                    prepareHallScene()
                 } else {
                     enterSessionLocal(hallId)
                 }
@@ -592,7 +595,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 if (useRemote) {
-                    val people = api.sessionParticipants(sessionId)
+                    val incoming = api.sessionParticipants(sessionId)
+                    val previous = _state.value.sittingParticipants
+                    val people = if (incoming.isEmpty() && previous.isNotEmpty()) previous else incoming
                     _state.value = _state.value.copy(
                         sittingParticipants = people,
                         sittingCount = people.size
@@ -636,6 +641,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                             ),
                             sittingParticipants = people
                         )
+                        prepareHallScene()
                         joined.remainingMillis.takeIf { it > 0 }
                     }.getOrNull()
                 }
@@ -668,6 +674,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingCount = presence.size,
             sittingExpected = maxOf(_state.value.selectedParticipantCount, presence.size)
         )
+        prepareHallScene()
         mutate { st ->
             val already = st.attendance.any { it.sessionId == sessionId && it.userId == st.profile.id && it.leftAtMillis == null }
             if (already) st
@@ -842,7 +849,9 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             sittingExpected = _state.value.sittingExpected,
             suppressAutoSitKey = _state.value.suppressAutoSitKey,
             seats = _state.value.seats,
-            meditating = _state.value.meditating
+            meditating = _state.value.meditating,
+            communityPeople = _state.value.communityPeople,
+            inOpenHall = _state.value.inOpenHall
         )
         val disc = _state.value.discovery
         SittingAlarms.reschedule(getApplication(), disc.sittingNow + disc.startingSoon + disc.myHalls)
@@ -873,7 +882,10 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             actionError = _state.value.actionError,
             suppressAutoSitKey = _state.value.suppressAutoSitKey,
             seats = _state.value.seats,
-            meditating = _state.value.meditating
+            meditating = _state.value.meditating,
+            communityCount = _state.value.communityCount,
+            communityPeople = _state.value.communityPeople,
+            inOpenHall = _state.value.inOpenHall
         )
     }
 

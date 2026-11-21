@@ -56,7 +56,7 @@ fun SeatedMeditator(
         if (seat.occupied && name != null) {
             Text(
                 name,
-                color = Color(0xFF1A1A1A),
+                color = Color(0xFF344334),
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -64,7 +64,7 @@ fun SeatedMeditator(
                     .align(Alignment.BottomCenter)
                     .offset(y = 10.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFFF6F5F2))
+                    .background(Color(0xFFF4F1E8))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             )
         }

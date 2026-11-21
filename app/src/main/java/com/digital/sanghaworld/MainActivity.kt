@@ -1,6 +1,7 @@
 package com.digital.sanghaworld
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -24,12 +25,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.VolunteerActivism
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.TextButton
@@ -47,6 +50,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,6 +61,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.util.Consumer
+import com.digital.sanghaworld.service.TimerService
 import com.digital.sanghaworld.ui.AwarenessRunningScreen
 import com.digital.sanghaworld.ui.AwarenessSetupScreen
 import com.digital.sanghaworld.ui.CompletionScreen
@@ -157,6 +163,17 @@ fun VipassanaApp(
     val hallUi by hallViewModel.state.collectAsState()
     val authState by authViewModel.state.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = context as ComponentActivity
+    var showFullTimer by remember {
+        mutableStateOf(activity.intent?.getBooleanExtra(TimerService.EXTRA_OPEN_TIMER, false) == true)
+    }
+    DisposableEffect(activity) {
+        val listener = Consumer<Intent> { incoming ->
+            if (incoming.getBooleanExtra(TimerService.EXTRA_OPEN_TIMER, false)) showFullTimer = true
+        }
+        activity.addOnNewIntentListener(listener)
+        onDispose { activity.removeOnNewIntentListener(listener) }
+    }
     var showLog by remember { mutableStateOf(false) }
     var showHalls by remember { mutableStateOf(true) }
     var showAwareness by remember { mutableStateOf(false) }
@@ -179,6 +196,11 @@ fun VipassanaApp(
     }
     var openJoinCode by remember { mutableStateOf(false) }
     var hallPage by remember { mutableStateOf("home") }
+    var hallOrigin by remember { mutableStateOf("home") }
+    var directorySearching by remember { mutableStateOf(false) }
+    LaunchedEffect(hallPage) {
+        if (hallPage != "directory") directorySearching = false
+    }
     var communityMinutes by remember { mutableStateOf(30) }
     var communityGong by remember { mutableStateOf("dhamma") }
     var askCommunityExit by remember { mutableStateOf(false) }
@@ -212,10 +234,10 @@ fun VipassanaApp(
     LaunchedEffect(authState.signedIn) {
         if (authState.ready && !authState.signedIn) SittingAlarms.cancelAll(context)
     }
-    LaunchedEffect(hallPage, hallUi.meditating) {
+    LaunchedEffect(hallPage, hallUi.inOpenHall) {
         if (hallPage != "community") return@LaunchedEffect
         while (true) {
-            if (hallUi.meditating) hallViewModel.beatCommunity()
+            if (hallUi.inOpenHall) hallViewModel.beatCommunity()
             hallViewModel.refreshCommunity()
             delay(3_000)
         }
@@ -294,8 +316,16 @@ fun VipassanaApp(
             onMainScreen -> askQuitApp = true
             showProfile && profilePage != "home" -> profilePage = "home"
             showProfile -> showHome()
+            isRunning && showFullTimer -> {
+                showFullTimer = false
+                when {
+                    hallUi.inOpenHall -> hallPage = "community"
+                    hallUi.meditating || !hallUi.sittingHallName.isNullOrBlank() -> hallPage = "detail"
+                }
+            }
             hallPage == "community" -> askCommunityExit = true
             isRunning && hallPage == "info" -> hallPage = "detail"
+            isRunning && hallUi.inOpenHall && hallPage != "community" -> hallPage = "community"
             isRunning -> endSit()
             isAwarenessRunning -> viewModel.stopAwareness(context)
             hasCompleted -> {
@@ -307,6 +337,8 @@ fun VipassanaApp(
                 detailsFromRoom = false
                 hallPage = "detail"
             }
+            showHalls && hallPage == "info" && hallOrigin == "directory" -> hallPage = "directory"
+            showHalls && hallPage == "detail" && hallOrigin == "directory" -> hallPage = "info"
             showHalls && hallPage != "home" -> {
                 hallPage = "home"
                 hallViewModel.refresh()
@@ -363,14 +395,23 @@ fun VipassanaApp(
         LaunchedEffect(hallViewModel.activeSessionId, isRunning) {
             while (isRunning && hallViewModel.activeSessionId != null) {
                 hallViewModel.refreshPresence()
-                delay(10_000)
+                delay(3_000)
             }
         }
         val stopSit = { endSit() }
-        if (hallPage == "community") {
+        if (showFullTimer) {
+            TimerScreen(
+                timeLeft = timeLeft,
+                totalDuration = totalDuration,
+                isInPrep = isInPrep,
+                onStop = stopSit
+            )
+        } else if (hallPage == "community" || hallUi.inOpenHall) {
             CommunitySittingScreen(
-                people = hallUi.sittingParticipants,
+                people = hallUi.communityPeople,
                 currentUserId = hallUi.profile?.id,
+                timeLeftMillis = timeLeft,
+                onOpenTimer = { showFullTimer = true },
                 onLeave = { askCommunityExit = true }
             )
         } else if (hallPage == "info") {
@@ -397,6 +438,8 @@ fun VipassanaApp(
                 hallName = hallUi.sittingHallName ?: hallUi.selectedHall?.name.orEmpty(),
                 timeLeft = timeLeft,
                 seats = hallUi.seats,
+                people = hallUi.sittingParticipants,
+                currentUserId = hallUi.profile?.id,
                 joined = hallUi.meditating,
                 startsAtMillis = hallUi.selectedNextStart.takeIf { it > 0 },
                 muted = hallMuted,
@@ -410,6 +453,7 @@ fun VipassanaApp(
                 onToggleMute = { hallMuted = !hallMuted },
                 onToggleFocus = { hallFocus = !hallFocus },
                 onMoreDetails = { detailsFromRoom = true; hallPage = "info" },
+                onOpenTimer = { showFullTimer = true },
                 onBack = {
                     hallViewModel.leaveMeditationSeat()
                     hallFocus = false
@@ -570,8 +614,11 @@ fun VipassanaApp(
                 }
             ) {
                 Scaffold(
+                    containerColor = MaterialTheme.colorScheme.background,
                     topBar = {
-                        if (!(showHalls && hallPage == "detail")) {
+                        val onHallsHome = showHalls && hallPage == "home" &&
+                            !showProfile && !showSupport && !showAwareness && !showSettings
+                        if (!(showHalls && hallPage == "detail") && !onHallsHome) {
                             TopAppBar(
                                 title = {
                                     Text(
@@ -603,7 +650,15 @@ fun VipassanaApp(
                                             Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                                         }
                                     } else if (showHalls && hallPage != "home" && hallPage != "detail") {
-                                        IconButton(onClick = { hallPage = "home"; hallViewModel.refresh() }) {
+                                        IconButton(onClick = {
+                                            when {
+                                                hallPage == "info" && hallOrigin == "directory" -> hallPage = "directory"
+                                                else -> {
+                                                    hallPage = "home"
+                                                    hallViewModel.refresh()
+                                                }
+                                            }
+                                        }) {
                                             Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                                         }
                                     } else {
@@ -613,6 +668,19 @@ fun VipassanaApp(
                                     }
                                 },
                                 actions = {
+                                    if (showHalls && hallPage == "directory" && !showProfile && !showSupport && !showAwareness && !showSettings) {
+                                        IconButton(onClick = { directorySearching = !directorySearching }) {
+                                            Icon(
+                                                Icons.Outlined.Search,
+                                                contentDescription = "Search halls",
+                                                tint = if (directorySearching) {
+                                                    Color(0xFF344334)
+                                                } else {
+                                                    Color(0xFF526650)
+                                                }
+                                            )
+                                        }
+                                    }
                                     if (showHalls && hallPage == "home" && !showProfile && !showSupport && !showAwareness && !showSettings) {
                                         IconButton(onClick = {
                                             profilePage = "home"
@@ -623,9 +691,26 @@ fun VipassanaApp(
                                     }
                                 },
                                 colors = TopAppBarDefaults.topAppBarColors(
-                                    containerColor = MaterialTheme.colorScheme.background,
-                                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground
+                                    containerColor = if (showHalls && hallPage == "directory") {
+                                        Color(0xFFF4F1E8)
+                                    } else {
+                                        MaterialTheme.colorScheme.background
+                                    },
+                                    titleContentColor = if (showHalls && hallPage == "directory") {
+                                        Color(0xFF344334)
+                                    } else {
+                                        MaterialTheme.colorScheme.onBackground
+                                    },
+                                    navigationIconContentColor = if (showHalls && hallPage == "directory") {
+                                        Color(0xFF526650)
+                                    } else {
+                                        MaterialTheme.colorScheme.onBackground
+                                    },
+                                    actionIconContentColor = if (showHalls && hallPage == "directory") {
+                                        Color(0xFF526650)
+                                    } else {
+                                        MaterialTheme.colorScheme.onBackground
+                                    }
                                 )
                             )
                         }
@@ -739,9 +824,17 @@ fun VipassanaApp(
                                         beginHallSitting(start, remaining)
                                     }
                                 }
+                                LaunchedEffect(hallViewModel.activeSessionId) {
+                                    while (hallViewModel.activeSessionId != null) {
+                                        hallViewModel.refreshPresence()
+                                        delay(3_000)
+                                    }
+                                }
                                 MeditationHallScreen(
                                     hallName = hallUi.selectedHall?.name.orEmpty(),
                                     seats = hallUi.seats,
+                                    people = hallUi.sittingParticipants,
+                                    currentUserId = hallUi.profile?.id,
                                     joined = hallUi.meditating,
                                     timeLeftMillis = if (isRunning) timeLeft else null,
                                     startsAtMillis = hallUi.selectedNextStart.takeIf { it > 0 },
@@ -775,7 +868,13 @@ fun VipassanaApp(
                                     onToggleMute = { hallMuted = !hallMuted },
                                     onToggleFocus = { hallFocus = !hallFocus },
                                     onMoreDetails = { detailsFromRoom = true; hallPage = "info" },
-                                    onBack = { hallPage = "home"; hallViewModel.refresh() },
+                                    onBack = {
+                                        if (hallOrigin == "directory") hallPage = "info"
+                                        else {
+                                            hallPage = "home"
+                                            hallViewModel.refresh()
+                                        }
+                                    },
                                     onNavHome = { showHome() },
                                     onNavHalls = { hallPage = "home" },
                                     onNavSessions = { hallPage = "logs" },
@@ -817,6 +916,8 @@ fun VipassanaApp(
                                     if (detailsFromRoom) {
                                         detailsFromRoom = false
                                         hallPage = "detail"
+                                    } else if (hallOrigin == "directory") {
+                                        hallPage = "directory"
                                     } else {
                                         hallPage = "home"
                                         hallViewModel.refresh()
@@ -842,7 +943,9 @@ fun VipassanaApp(
                                     (hallUi.discovery.sittingNow + hallUi.discovery.startingSoon + hallUi.discovery.myHalls)
                                         .distinctBy { it.hall.id }
                                 },
+                                searching = directorySearching,
                                 onOpen = { card ->
+                                    hallOrigin = "directory"
                                     hallViewModel.openHall(card.hall.id)
                                     hallPage = "info"
                                 },
@@ -855,6 +958,11 @@ fun VipassanaApp(
                             )
                             else -> HallsHomeScreen(
                                 ui = hallUi,
+                                onOpenProfile = {
+                                    profilePage = "home"
+                                    showProfile = true
+                                },
+                                onOpenMenu = { scope.launch { drawerState.open() } },
                                 onCreateHall = { hallPage = "create" },
                                 onBrowseHalls = {
                                     hallViewModel.refresh()

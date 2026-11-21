@@ -3,7 +3,6 @@ package com.digital.sanghaworld.ui.hall
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,11 +11,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,24 +35,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.hall.HallCard
-import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.hall.HallUiState
 import com.digital.sanghaworld.ui.SanghaField
 import com.digital.sanghaworld.ui.StatusText
+
+private val Page = Color(0xFFF4F1E8)
+private val OpenCard = Color(0xFFDDE3D7)
+private val ScheduleCard = Color(0xFFE9E3D8)
+private val Ink = Color(0xFF344334)
+private val Muted = Color(0xFF6E7664)
+private val Forest = Color(0xFF526650)
+private val White = Color(0xFFFFFFFF)
 
 @Composable
 fun HallsHomeScreen(
     ui: HallUiState,
     onOpenHall: (HallCard) -> Unit,
     onOpenCommunity: () -> Unit = {},
+    onOpenProfile: () -> Unit = {},
+    onOpenMenu: () -> Unit = {},
     onCreateHall: () -> Unit = {},
     onBrowseHalls: () -> Unit = {},
     onJoinCode: (String) -> Unit,
@@ -64,36 +75,68 @@ fun HallsHomeScreen(
         }
     }
 
-    val mine = ui.discovery.myHalls
-        .distinctBy { it.hall.id }
-        .sortedBy { it.nextStartMillis }
+    val scheduledCount = (ui.discovery.catalog.ifEmpty {
+        ui.discovery.sittingNow + ui.discovery.startingSoon + ui.discovery.myHalls
+    }).distinctBy { it.hall.id }.size
 
-    LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            if (!ui.actionError.isNullOrBlank()) {
-                item {
-                    StatusText(
-                        ui.actionError,
-                        error = true,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-                    )
-                }
+    Column(
+        modifier
+            .fillMaxSize()
+            .background(Page)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Outlined.Menu,
+                contentDescription = "Menu",
+                tint = Forest,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onOpenMenu)
+                    .padding(8.dp)
+            )
+            Spacer(Modifier.size(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Meditation Hall",
+                    color = Ink,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "Meditate together",
+                    color = Muted,
+                    fontSize = 14.sp
+                )
             }
-            item {
-                Spacer(Modifier.height(12.dp))
-                OpenHallCard(count = ui.communityCount, onEnter = onOpenCommunity)
-                Spacer(Modifier.height(14.dp))
-                ScheduleHallCard(onBrowse = onBrowseHalls, onCreate = onCreateHall)
-                if (mine.isNotEmpty()) {
-                    Spacer(Modifier.height(14.dp))
-                    MyHallsCard(halls = mine, onOpen = onOpenHall)
-                }
-                Spacer(Modifier.height(24.dp))
-            }
+            Icon(
+                Icons.Outlined.Person,
+                contentDescription = "My Space",
+                tint = Forest,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, Color(0xFFC9CFC2), CircleShape)
+                    .clickable(onClick = onOpenProfile)
+                    .padding(8.dp)
+            )
         }
+        if (!ui.actionError.isNullOrBlank()) {
+            Spacer(Modifier.height(12.dp))
+            StatusText(ui.actionError, error = true)
+        }
+        Spacer(Modifier.height(18.dp))
+        OpenHallCard(count = ui.communityCount, onEnter = onOpenCommunity)
+        Spacer(Modifier.height(14.dp))
+        ScheduleHallCard(
+            scheduledCount = scheduledCount,
+            onBrowse = onBrowseHalls,
+            onCreate = onCreateHall
+        )
+        Spacer(Modifier.height(16.dp))
+    }
 
     if (showCodeDialog) {
         AlertDialog(
@@ -126,145 +169,111 @@ fun HallsHomeScreen(
 
 @Composable
 private fun OpenHallCard(count: Int, onEnter: () -> Unit) {
-    MainCard {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(OpenCard)
+            .padding(16.dp)
+    ) {
+        Text("Open Meditation Hall", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(6.dp))
         Text(
-            "Open Meditation Hall",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface
+            "A hall that is always open. Join anytime and sit alongside fellow meditators.",
+            color = Muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Open all day. Your timer, your bell.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
-        )
-        Spacer(Modifier.height(16.dp))
-        LiveCount(count, onDark = false)
-        Spacer(Modifier.height(18.dp))
-        LoudButton("Enter Hall", onEnter)
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Groups, contentDescription = null, tint = Forest, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.size(6.dp))
+            Text(
+                if (count == 1) "1 meditating now" else "$count meditating now",
+                color = Muted,
+                fontSize = 13.sp
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        ForestButton("ENTER HALL", onEnter)
     }
 }
 
 @Composable
-private fun ScheduleHallCard(onBrowse: () -> Unit, onCreate: () -> Unit) {
-    MainCard {
+private fun ScheduleHallCard(scheduledCount: Int, onBrowse: () -> Unit, onCreate: () -> Unit) {
+    val hallsLabel = if (scheduledCount == 1) "1 hall scheduled" else "$scheduledCount halls scheduled"
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(ScheduleCard)
+            .padding(16.dp)
+    ) {
+        Text("Scheduled Halls", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(6.dp))
         Text(
-            "Schedule Meditation Hall",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Sit with others at a set time, or open a hall of your own.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
-        )
-        Spacer(Modifier.height(18.dp))
-        LoudButton("Scheduled halls", onBrowse)
-        Spacer(Modifier.height(10.dp))
-        LoudButton("Create a meditation hall", onCreate)
-    }
-}
-
-@Composable
-private fun MyHallsCard(halls: List<HallCard>, onOpen: (HallCard) -> Unit) {
-    MainCard {
-        Text(
-            "My Meditation Halls",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface
+            "Join a scheduled group sitting or create a hall for others to join.",
+            color = Muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp
         )
         Spacer(Modifier.height(14.dp))
-        halls.forEach { card ->
-            JoinedHallRow(card, onClick = { onOpen(card) })
-            Spacer(Modifier.height(8.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(White)
+                .padding(14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Upcoming sittings", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(hallsLabel, color = Muted, fontSize = 13.sp)
+                }
+                Icon(
+                    Icons.Outlined.CalendarMonth,
+                    contentDescription = null,
+                    tint = Forest,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            ForestButton("VIEW SCHEDULED HALLS", onBrowse)
         }
-    }
-}
-
-@Composable
-private fun JoinedHallRow(card: HallCard, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    val localStart = Instant.ofEpochMilli(card.nextStartMillis).atZone(ZoneId.systemDefault())
-    val whenLabel = localStart.format(DateTimeFormatter.ofPattern("EEE")) + " " +
-        localStart.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .border(1.dp, MaterialTheme.colorScheme.outline, shape)
-            .background(MaterialTheme.colorScheme.background)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
+        Spacer(Modifier.height(10.dp))
         Text(
-            camelCaseHallName(card.hall.name),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            whenLabel,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
+            "+ CREATE A MEDITATION HALL",
+            color = Forest,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.6.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(White)
+                .clickable(onClick = onCreate)
+                .padding(vertical = 14.dp)
         )
     }
 }
 
 @Composable
-private fun MainCard(content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(22.dp)
-    Column(
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
-            .fillMaxWidth()
-            .clip(shape)
-            .border(1.dp, MaterialTheme.colorScheme.outline, shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 20.dp, vertical = 22.dp)
-    ) { content() }
-}
-
-@Composable
-private fun LoudButton(label: String, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+private fun ForestButton(label: String, onClick: () -> Unit) {
     Text(
         label,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onPrimary,
+        color = White,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 0.8.sp,
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.primary)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Forest)
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp)
     )
-}
-
-@Composable
-private fun LiveCount(count: Int, onDark: Boolean) {
-    val dot = if (count > 0) {
-        if (onDark) Color(0xFFF6F5F2) else MaterialTheme.colorScheme.primary
-    } else {
-        if (onDark) Color(0xFFF6F5F2).copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline
-    }
-    val label = if (count == 1) "1 sitting" else "$count sitting"
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .background(dot)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (onDark) Color(0xFFF6F5F2) else MaterialTheme.colorScheme.onSurface
-        )
-    }
 }
 
 

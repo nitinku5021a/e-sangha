@@ -64,9 +64,9 @@ object DatabaseFactory {
         val morning = UUID.fromString("00000000-0000-0000-0000-000000000011")
         val evening = UUID.fromString("00000000-0000-0000-0000-000000000012")
         val sunday = UUID.fromString("00000000-0000-0000-0000-000000000013")
-        hall(morning, "MorningVipassana", "A quiet daily sit. Shared timer, optional bell, no conversation.", 3600, "morn01")
-        hall(evening, "EveningSit", "Forty-five minutes after the day. Sit together in silence.", 2700, "even01")
-        hall(sunday, "SundayLongSit", "A two-hour weekend sitting. Arrive when you can.", 7200, "sunl01")
+        hall(morning, "Morning Vipassana", "A quiet daily sit. Shared timer, optional bell, no conversation.", 3600, "morn01")
+        hall(evening, "Evening Sit", "Forty-five minutes after the day. Sit together in silence.", 2700, "even01")
+        hall(sunday, "Sunday Long Sit", "A two-hour weekend sitting. Arrive when you can.", 7200, "sunl01")
         HallSchedules.insert {
             it[id] = UUID.randomUUID()
             it[hallId] = morning

@@ -181,7 +181,8 @@ fun HallDetailScreen(
         MetaRow("Share code", hall.shareCode)
         MetaRow(
             if (inSession) "Sitting" else "Expected",
-            "${ui.selectedParticipantCount}"
+            if (inSession && ui.sittingParticipants.isNotEmpty()) "${ui.sittingParticipants.size}"
+            else "${ui.selectedParticipantCount}"
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
         Row(

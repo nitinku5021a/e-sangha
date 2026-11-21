@@ -1,9 +1,11 @@
 package com.meditationhall.services
 
 import com.meditationhall.ApiException
+import com.meditationhall.db.Attendance
 import com.meditationhall.db.HallMemberships
 import com.meditationhall.db.HallSchedules
 import com.meditationhall.db.Halls
+import com.meditationhall.db.MeditationSessions
 import com.meditationhall.db.now
 import com.meditationhall.db.uuid
 import com.meditationhall.dto.CreateHallRequest
@@ -11,6 +13,7 @@ import com.meditationhall.dto.HallDto
 import com.meditationhall.dto.HallsResponse
 import com.meditationhall.dto.UpdateHallRequest
 import io.ktor.http.HttpStatusCode
+import java.time.Instant
 import java.util.UUID
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
@@ -44,6 +47,7 @@ class HallService {
             val next = ScheduleMath.nextStartMillis(spec)
             val remaining = next?.let { ScheduleMath.remainingSeconds(it, row[Halls.durationSeconds]) }
             val members = HallMemberships.selectAll().count { it[HallMemberships.hallId] == id }
+            val sitting = if (remaining != null && next != null) openSitters(id, next) else 0
             HallDto(
                 id = id.toString(),
                 creatorId = row[Halls.creatorId].toString(),
@@ -60,7 +64,7 @@ class HallService {
                 audioDurationSeconds = row[Halls.audioDurationSeconds],
                 nextStartMillis = next,
                 remainingSeconds = remaining,
-                participantCount = if (remaining != null) members else members,
+                participantCount = sitting,
                 joined = joined,
                 startLocalTime = spec.startLocalTime,
                 scheduleType = spec.type,
@@ -73,6 +77,18 @@ class HallService {
             myHalls = cards.filter { it.joined }.sortedBy { it.nextStartMillis ?: Long.MAX_VALUE },
             catalog = cards.sortedBy { it.name.lowercase() }
         )
+    }
+
+    private fun openSitters(hallId: UUID, startMillis: Long): Int {
+        val start = Instant.ofEpochMilli(startMillis)
+        val sessionIds = MeditationSessions.selectAll()
+            .filter { it[MeditationSessions.hallId] == hallId && it[MeditationSessions.scheduledStart] == start }
+            .map { it[MeditationSessions.id] }
+            .toSet()
+        if (sessionIds.isEmpty()) return 0
+        return Attendance.selectAll().count {
+            it[Attendance.sessionId] in sessionIds && it[Attendance.leftAt] == null
+        }.toInt()
     }
 
     fun get(userId: UUID, hallId: UUID): HallDto {
@@ -273,8 +289,8 @@ class HallService {
                 token.split(Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})"))
             }
             .filter { it.isNotEmpty() }
-        if (words.isEmpty()) return "UntitledHall"
-        return words.joinToString("") { part ->
+        if (words.isEmpty()) return "Untitled Hall"
+        return words.joinToString(" ") { part ->
             part.lowercase().replaceFirstChar { it.titlecase() }
         }
     }

@@ -42,10 +42,10 @@ val SanghaScreenPadding = 24.dp
 fun SanghaMark(modifier: Modifier = Modifier, size: Dp = 48.dp) {
     Canvas(modifier.size(size)) {
         val r = this.size.minDimension / 2f
-        drawCircle(color = Color(0xFF2C3340), radius = r)
-        drawCircle(color = Color(0xFFF6F5F2), radius = r * 0.72f)
-        drawCircle(color = Color(0xFF1A1A1A), radius = r * 0.34f)
-        drawCircle(color = Color(0xFFF6F5F2), radius = r * 0.12f)
+        drawCircle(color = Color(0xFF526650), radius = r)
+        drawCircle(color = Color(0xFFF4F1E8), radius = r * 0.72f)
+        drawCircle(color = Color(0xFF344334), radius = r * 0.34f)
+        drawCircle(color = Color(0xFFF4F1E8), radius = r * 0.12f)
     }
 }
 
@@ -57,7 +57,7 @@ fun QuietButton(
     emphasized: Boolean = false,
     enabled: Boolean = true
 ) {
-    val shape = SanghaPillShape
+    val shape = RoundedCornerShape(12.dp)
     val bg = when {
         !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         emphasized -> MaterialTheme.colorScheme.primary

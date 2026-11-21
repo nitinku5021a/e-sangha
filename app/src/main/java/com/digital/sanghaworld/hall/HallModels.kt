@@ -162,8 +162,8 @@ fun camelCaseHallName(raw: String): String {
             token.split(Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})"))
         }
         .filter { it.isNotEmpty() }
-    if (words.isEmpty()) return "UntitledHall"
-    return words.joinToString("") { part ->
+    if (words.isEmpty()) return "Untitled Hall"
+    return words.joinToString(" ") { part ->
         part.lowercase().replaceFirstChar { it.titlecase() }
     }
 }

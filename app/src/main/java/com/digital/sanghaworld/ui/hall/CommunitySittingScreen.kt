@@ -37,13 +37,13 @@ import androidx.compose.ui.unit.sp
 import com.digital.sanghaworld.hall.ParticipantPresence
 import kotlinx.coroutines.delay
 
-private val Page = Color(0xFFFCFCFC)
-private val CardBeige = Color(0xFFE8E4DA)
-private val HallPanel = Color(0xFFD5D6CB)
-private val Seat = Color(0xFFC0C5B9)
-private val InkOlive = Color(0xFF465447)
+private val Page = Color(0xFFF4F1E8)
+private val CardBeige = Color(0xFFE9E3D8)
+private val HallPanel = Color(0xFFDDE3D7)
+private val Seat = Color(0xFFC9D1C2)
+private val InkOlive = Color(0xFF344334)
 private val CountOlive = Color(0xFF526650)
-private val Caption = Color(0xFF6E7668)
+private val Caption = Color(0xFF6E7664)
 private val Forest = Color(0xFF526650)
 private val White = Color(0xFFFFFFFF)
 
@@ -51,6 +51,8 @@ private val White = Color(0xFFFFFFFF)
 fun CommunitySittingScreen(
     people: List<ParticipantPresence>,
     currentUserId: String?,
+    timeLeftMillis: Long = 0L,
+    onOpenTimer: () -> Unit = {},
     onLeave: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -64,7 +66,7 @@ fun CommunitySittingScreen(
             delay(1_000)
         }
     }
-    Column(
+    BoxWithConstraints(
         modifier
             .fillMaxSize()
             .background(Page)
@@ -72,6 +74,7 @@ fun CommunitySittingScreen(
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
+    Column(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -150,6 +153,30 @@ fun CommunitySittingScreen(
             )
         }
     }
+        if (timeLeftMillis > 0L) {
+            MovableChip(
+                parentWidthPx = constraints.maxWidth,
+                parentHeightPx = constraints.maxHeight,
+                onClick = onOpenTimer
+            ) {
+                Column(
+                    Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Forest)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("Your sit", color = White.copy(alpha = 0.85f), fontSize = 11.sp)
+                    Text(
+                        formatClock(timeLeftMillis),
+                        color = White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -180,6 +207,14 @@ private fun SittingSeat(name: String, spent: String, modifier: Modifier = Modifi
             maxLines = 1
         )
     }
+}
+
+private fun formatClock(millis: Long): String {
+    val totalSec = (millis / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s)
 }
 
 private fun seatName(raw: String): String {

@@ -16,11 +16,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -29,17 +36,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val Page = Color(0xFFFCFCFC)
-private val CardBeige = Color(0xFFE8E4DA)
-private val HallPanel = Color(0xFFD5D6CB)
-private val Seat = Color(0xFFC0C5B9)
-private val SeatIcon = Color(0xFF6C7769)
-private val InkOlive = Color(0xFF465447)
+private val Page = Color(0xFFF4F1E8)
+private val CardBeige = Color(0xFFE9E3D8)
+private val HallPanel = Color(0xFFDDE3D7)
+private val Seat = Color(0xFFC9D1C2)
+private val SeatIcon = Color(0xFF526650)
+private val InkOlive = Color(0xFF344334)
 private val CountOlive = Color(0xFF526650)
-private val Caption = Color(0xFF6E7668)
+private val Caption = Color(0xFF6E7664)
 private val Chip = Color(0xFFE5E8DE)
-private val ChipText = Color(0xFF6A7768)
-private val DurationInk = Color(0xFF2C2C2C)
+private val ChipText = Color(0xFF6E7664)
+private val DurationInk = Color(0xFF344334)
 private val Forest = Color(0xFF526650)
 private val White = Color(0xFFFFFFFF)
 
@@ -53,10 +60,9 @@ fun CommunityRoomScreen(
     onStart: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LaunchedEffect(minutes) {
-        if (minutes !in presets) onMinutes(30)
-    }
-    val selected = if (minutes in presets) minutes else 30
+    var customOpen by remember { mutableStateOf(minutes !in presets) }
+    var customText by remember { mutableStateOf(if (minutes !in presets) minutes.toString() else "") }
+    val customMinutes = customText.toIntOrNull()?.takeIf { it in 1..240 }
     Column(
         modifier
             .fillMaxSize()
@@ -134,14 +140,49 @@ fun CommunityRoomScreen(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     presets.forEach { choice ->
                         DurationChip(
-                            label = "$choice min",
-                            selected = selected == choice,
-                            onClick = { onMinutes(choice) },
+                            label = "${choice}m",
+                            selected = !customOpen && minutes == choice,
+                            onClick = {
+                                customOpen = false
+                                onMinutes(choice)
+                            },
                             modifier = Modifier.weight(1f)
                         )
+                    }
+                    DurationChip(
+                        label = if (customOpen && customMinutes != null) "${customMinutes}m" else "+",
+                        selected = customOpen,
+                        onClick = { customOpen = true },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (customOpen) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextField(
+                            value = customText,
+                            onValueChange = { raw ->
+                                customText = raw.filter { it.isDigit() }.take(3)
+                                customText.toIntOrNull()?.takeIf { it in 1..240 }?.let(onMinutes)
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            placeholder = { Text("1–240", color = ChipText, fontSize = 14.sp) },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Chip,
+                                unfocusedContainerColor = Chip,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                cursorColor = Forest,
+                                focusedTextColor = InkOlive,
+                                unfocusedTextColor = InkOlive
+                            ),
+                            modifier = Modifier.weight(1f).height(52.dp)
+                        )
+                        Text("m", color = InkOlive, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -196,6 +237,7 @@ private fun DurationChip(
         fontWeight = FontWeight.Medium,
         textAlign = TextAlign.Center,
         maxLines = 1,
+        softWrap = false,
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(if (selected) Color(0xFFB7BEB0) else Chip)
