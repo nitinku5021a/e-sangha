@@ -209,9 +209,9 @@ class DonationViewModel(application: Application) : AndroidViewModel(application
     companion object {
         const val MAX_QUANTITY = 10
         private val TIER_DEFINITIONS = listOf(
-            TierDefinition("group_donation_unit_1x", "1X", 1, "Activate the 1X product in Play Console."),
-            TierDefinition("group_donation_unit_10x", "10X", 10, "Activate the 10X product in Play Console."),
-            TierDefinition("group_donation_unit_100x", "100X", 100, "Activate the 100X product in Play Console.")
+            TierDefinition("sangha.donation.1x", "1X", 1, "Activate the 1X product in Play Console."),
+            TierDefinition("sangha.donation.10x", "10X", 10, "Activate the 10X product in Play Console."),
+            TierDefinition("sangha.donation.100x", "100X", 100, "Activate the 100X product in Play Console.")
         )
     }
 }

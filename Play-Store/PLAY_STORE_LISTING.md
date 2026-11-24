@@ -60,7 +60,7 @@ Use after you upload a new AAB. Bump `versionCode` in `app/build.gradle.kts` if 
 | Website | Optional |
 | Privacy policy URL | Required if you collect any data; still recommended. State that the sit log stays on the device and donations go through Google Play. |
 | Contains ads | No |
-| In-app products | Yes (voluntary donations: `group_donation_unit_1x`, `group_donation_unit_10x`, `group_donation_unit_100x`) |
+| In-app products | Yes (voluntary donations: `sangha.donation.1x`, `sangha.donation.10x`, `sangha.donation.100x`) |
 | Target audience | 18+ is safest; content is not for children |
 | News app | No |
 | COVID-19 contact tracing | No |
