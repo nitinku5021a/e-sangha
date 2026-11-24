@@ -12,7 +12,9 @@ import com.meditationhall.db.now
 import com.meditationhall.db.uuid
 import com.meditationhall.services.ScheduleMath
 import com.meditationhall.services.ScheduleSpec
+import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -36,6 +38,7 @@ import org.slf4j.LoggerFactory
 object NetworkPresence {
     private val log = LoggerFactory.getLogger(NetworkPresence::class.java)
     private val hostId: UUID = UUID.fromString("00000000-0000-0000-0000-0000000000c0")
+    private val nitinId: UUID = UUID.fromString("6bc7a786-0a10-45bb-a864-818385c64708")
 
     fun start() {
         if (System.getenv("NETWORK_SIM") == "false") {
@@ -71,7 +74,8 @@ object NetworkPresence {
         val days: String,
         val durationMinutes: Int,
         val shareCode: String,
-        val memberZones: Set<String>
+        val memberZones: Set<String>,
+        val ownerId: UUID? = null
     )
 
     private fun people(): List<Person> {
@@ -207,21 +211,21 @@ object NetworkPresence {
             "Early Morning Vipassana India",
             "A dawn Vipassana sit, India time.",
             "Asia/Kolkata", "05:00", "DAILY", "", 60, "indm0500",
-            setOf("Asia/Kolkata")
+            setOf("Asia/Kolkata"), nitinId
         ),
         HallSeed(
             UUID.fromString("00000000-0000-0000-0001-00000000000a"),
             "Late Evening Vipassana Sitting",
             "A late Vipassana sit after the day, India time.",
             "Asia/Kolkata", "21:30", "DAILY", "", 60, "inde2130",
-            setOf("Asia/Kolkata")
+            setOf("Asia/Kolkata"), nitinId
         ),
         HallSeed(
             UUID.fromString("00000000-0000-0000-0001-00000000000b"),
             "Group Vipassana Evening",
             "An evening group Vipassana sit, India time.",
             "Asia/Kolkata", "19:00", "DAILY", "", 45, "indg1900",
-            setOf("Asia/Kolkata")
+            setOf("Asia/Kolkata"), nitinId
         )
     )
 
@@ -232,6 +236,7 @@ object NetworkPresence {
         val moment = Instant.now()
         transaction {
             ensureSeed(roster, hallSeeds, moment)
+            seedHistory(roster, hallSeeds, moment)
             syncOpenHall(roster, moment)
             syncScheduledHalls(roster, hallSeeds, demoIds, moment)
         }
@@ -285,7 +290,7 @@ object NetworkPresence {
             if (Halls.selectAll().none { it[Halls.id] == hall.id }) {
                 Halls.insert {
                     it[id] = hall.id
-                    it[creatorId] = hostId
+                    it[creatorId] = hall.ownerId ?: hostId
                     it[name] = hall.name
                     it[description] = hall.description
                     it[visibility] = "PUBLIC"
@@ -307,6 +312,25 @@ object NetworkPresence {
                     it[enabled] = true
                 }
             }
+            val owner = hall.ownerId
+            if (owner != null && Users.selectAll().any { it[Users.id] == owner }) {
+                Halls.update({ Halls.id eq hall.id }) {
+                    it[creatorId] = owner
+                    it[updatedAt] = moment
+                }
+                val ownerJoined = HallMemberships.selectAll().any {
+                    it[HallMemberships.hallId] == hall.id && it[HallMemberships.userId] == owner
+                }
+                if (!ownerJoined) {
+                    HallMemberships.insert {
+                        it[hallId] = hall.id
+                        it[userId] = owner
+                        it[joinedAt] = moment
+                        it[notificationEnabled] = true
+                        it[displayMode] = "AVATAR"
+                    }
+                }
+            }
             val members = roster.filter { it.zone in hall.memberZones }
             members.forEach { person ->
                 val joined = HallMemberships.selectAll().any {
@@ -322,6 +346,80 @@ object NetworkPresence {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Past completed sittings for each seeded hall. Later sits, including demo
+     * users who finish a live window, add their own attendance and logs on top.
+     */
+    private fun seedHistory(roster: List<Person>, hallSeeds: List<HallSeed>, moment: Instant) {
+        hallSeeds.forEachIndexed { hallIndex, hall ->
+            val zone = ZoneId.of(hall.zone)
+            val time = LocalTime.parse(hall.start)
+            val today = LocalDate.now(zone)
+            val members = roster.filter { it.zone in hall.memberZones }
+            val durationSeconds = hall.durationMinutes * 60
+            repeat(18) { ago ->
+                val day = today.minusDays((ago + 1).toLong())
+                if (!historyDay(hall.type, day)) return@repeat
+                val start = ZonedDateTime.of(day, time, zone).toInstant()
+                val end = start.plusSeconds(durationSeconds.toLong())
+                if (!end.isBefore(moment)) return@repeat
+                val sessionId = UUID.nameUUIDFromBytes("${hall.id}|${start.epochSecond}".toByteArray())
+                val existing = MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
+                if (existing == null) {
+                    MeditationSessions.insert {
+                        it[id] = sessionId
+                        it[hallId] = hall.id
+                        it[scheduledStart] = start
+                        it[actualStart] = start
+                        it[MeditationSessions.durationSeconds] = durationSeconds
+                        it[status] = "COMPLETED"
+                        it[createdAt] = start
+                    }
+                }
+                members.forEachIndexed { memberIndex, person ->
+                    val roll = (hallIndex * 13 + memberIndex * 5 + ago * 3) % 10
+                    if (roll > 7) return@forEachIndexed
+                    val sitSeconds = (durationSeconds * (6 + (roll % 4)) / 10).coerceIn(15 * 60, durationSeconds)
+                    val attendanceId = UUID.nameUUIDFromBytes("$sessionId|${person.id}".toByteArray())
+                    if (Attendance.selectAll().none { it[Attendance.id] == attendanceId }) {
+                        Attendance.insert {
+                            it[id] = attendanceId
+                            it[Attendance.sessionId] = sessionId
+                            it[userId] = person.id
+                            it[hallId] = hall.id
+                            it[joinedAt] = start.plusSeconds((memberIndex % 5) * 120L)
+                            it[leftAt] = start.plusSeconds(sitSeconds.toLong())
+                            it[lastSeenAt] = start.plusSeconds(sitSeconds.toLong())
+                            it[attendedDurationSeconds] = sitSeconds
+                            it[completionStatus] = "COMPLETED"
+                        }
+                    }
+                    val logId = UUID.nameUUIDFromBytes("log|$sessionId|${person.id}".toByteArray())
+                    if (MeditationLogs.selectAll().none { it[MeditationLogs.id] == logId }) {
+                        MeditationLogs.insert {
+                            it[id] = logId
+                            it[userId] = person.id
+                            it[MeditationLogs.sessionId] = sessionId
+                            it[hallId] = hall.id
+                            it[hallName] = hall.name
+                            it[date] = day.toString()
+                            it[MeditationLogs.durationSeconds] = sitSeconds
+                            it[completionStatus] = "COMPLETED"
+                            it[createdAt] = end
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun historyDay(type: String, day: LocalDate): Boolean {
+        return when (type) {
+            "WEEKDAYS" -> day.dayOfWeek != DayOfWeek.SATURDAY && day.dayOfWeek != DayOfWeek.SUNDAY
+            else -> true
         }
     }
 

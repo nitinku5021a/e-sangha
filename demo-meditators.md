@@ -1,6 +1,6 @@
 # Demo meditators
 
-The Open Hall times below are each person's own local sit. A scheduled hall uses the hall clock, and that person is in the room only while the hall is open.
+Nitin Kumar owns Early Morning Vipassana India, Group Vipassana Evening, and Late Evening Vipassana Sitting. The Open Hall times below are each person's own local sit. A scheduled hall uses the hall clock, and that person is in the room only while the hall is open.
 
 ## Halls
 
