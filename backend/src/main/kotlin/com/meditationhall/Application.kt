@@ -4,6 +4,7 @@ import com.meditationhall.auth.AuthService
 import com.meditationhall.db.DatabaseFactory
 import com.meditationhall.realtime.RealtimeHub
 import com.meditationhall.routes.apiRoutes
+import com.meditationhall.scheduler.NetworkPresence
 import com.meditationhall.scheduler.SessionScheduler
 import com.meditationhall.services.CommunityService
 import com.meditationhall.services.HallService
@@ -15,10 +16,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
-import io.ktor.server.engine.applicationEngineEnvironment
-import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.engine.sslConnector
 import io.ktor.server.plugins.callid.CallId
 import io.ktor.server.plugins.callid.callIdMdc
 import io.ktor.server.plugins.calllogging.CallLogging
@@ -29,8 +27,6 @@ import io.ktor.server.request.header
 import io.ktor.server.response.respond
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
-import java.io.File
-import java.security.KeyStore
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -38,36 +34,11 @@ import org.slf4j.event.Level
 
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
-    val keystorePath = System.getenv("TLS_KEYSTORE")
-    val keystoreFile = keystorePath?.let { File(it) }?.takeIf { it.isFile }
-    if (keystoreFile == null) {
-        embeddedServer(CIO, port = port, host = "0.0.0.0", module = Application::module)
-            .start(wait = true)
-        return
+    if (!System.getenv("TLS_KEYSTORE").isNullOrBlank()) {
+        System.err.println("TLS_KEYSTORE is set, but this process serves plain HTTP. Terminate TLS in front of the API.")
     }
-    val password = (System.getenv("TLS_KEYSTORE_PASSWORD") ?: "").toCharArray()
-    val keyStore = KeyStore.getInstance("PKCS12").apply {
-        keystoreFile.inputStream().use { load(it, password) }
-    }
-    val alias = System.getenv("TLS_KEY_ALIAS")
-        ?: keyStore.aliases().asSequence().first()
-    val httpsPort = System.getenv("HTTPS_PORT")?.toIntOrNull() ?: 443
-    embeddedServer(CIO, environment = applicationEngineEnvironment {
-        connector {
-            this.port = port
-            host = "0.0.0.0"
-        }
-        sslConnector(
-            keyStore = keyStore,
-            keyAlias = alias,
-            keyStorePassword = { password },
-            privateKeyPassword = { password }
-        ) {
-            this.port = httpsPort
-            host = "0.0.0.0"
-        }
-        module(Application::module)
-    }).start(wait = true)
+    embeddedServer(CIO, port = port, host = "0.0.0.0", module = Application::module)
+        .start(wait = true)
 }
 
 fun Application.module() {
@@ -79,6 +50,7 @@ fun Application.module() {
     val support = SupportService()
     val community = CommunityService()
     SessionScheduler(sessions, halls).start()
+    NetworkPresence.start()
 
     install(CallId) {
         retrieve { it.request.header(HttpHeaders.XRequestId) }
