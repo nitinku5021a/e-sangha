@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VolumeUp
@@ -55,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -151,6 +153,15 @@ fun HallDetailScreen(
         filePreview.value = false
         bellPreview.stop()
         previewing = false
+    }
+
+    fun shareHall() {
+        val text = "https://play.google.com/store/apps/details?id=com.digital.meditationsangha\n${camelCaseHallName(hall.name)}"
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        context.startActivity(Intent.createChooser(send, "Share hall"))
     }
 
     fun togglePreview() {
@@ -405,6 +416,12 @@ fun HallDetailScreen(
                 onClick = onJoin
             )
         }
+        ActionButton(
+            text = "Share hall",
+            filled = false,
+            icon = Icons.Outlined.Share,
+            onClick = { shareHall() }
+        )
         ActionButton(
             text = "Close",
             filled = false,

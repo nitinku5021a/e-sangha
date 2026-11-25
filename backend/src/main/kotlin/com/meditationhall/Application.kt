@@ -3,6 +3,7 @@ package com.meditationhall
 import com.meditationhall.auth.AuthService
 import com.meditationhall.db.DatabaseFactory
 import com.meditationhall.realtime.RealtimeHub
+import com.meditationhall.realtime.VoiceRelay
 import com.meditationhall.routes.apiRoutes
 import com.meditationhall.scheduler.NetworkPresence
 import com.meditationhall.scheduler.SessionScheduler
@@ -44,6 +45,7 @@ fun main() {
 fun Application.module() {
     DatabaseFactory.init()
     val hub = RealtimeHub()
+    val voice = VoiceRelay()
     val auth = AuthService()
     val halls = HallService()
     val sessions = SessionService(hub)
@@ -87,7 +89,7 @@ fun Application.module() {
         }
     }
     routing {
-        apiRoutes(auth, halls, sessions, support, community, hub)
+        apiRoutes(auth, halls, sessions, support, community, hub, voice)
     }
 }
 

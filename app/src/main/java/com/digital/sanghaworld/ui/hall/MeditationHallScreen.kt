@@ -70,6 +70,10 @@ fun MeditationHallScreen(
     onToggleFocus: () -> Unit,
     onMoreDetails: () -> Unit,
     onOpenTimer: (() -> Unit)? = null,
+    canSpeak: Boolean = false,
+    micOpen: Boolean = false,
+    hostSpeaking: Boolean = false,
+    onSpeakToggle: () -> Unit = {},
     onBack: () -> Unit,
     onNavHome: () -> Unit = {},
     onNavHalls: () -> Unit = {},
@@ -169,6 +173,39 @@ fun MeditationHallScreen(
                     }
                 }
                 Spacer(Modifier.height(14.dp))
+                if (canSpeak && joined) {
+                    Text(
+                        if (micOpen) "Tap to stop. The hall can hear you." else "Tap to speak. The hall can hear you.",
+                        color = Caption,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        if (micOpen) "STOP" else "SPEAK",
+                        color = White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 1.2.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Forest)
+                            .clickable(onClick = onSpeakToggle)
+                            .padding(vertical = 14.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                } else if (hostSpeaking && joined) {
+                    Text(
+                        "The host is speaking.",
+                        color = Caption,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    )
+                }
                 if (joined) {
                     Text(
                         "LEAVE",

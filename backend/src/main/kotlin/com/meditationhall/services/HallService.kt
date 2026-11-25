@@ -68,6 +68,8 @@ class HallService {
                 joined = joined,
                 startLocalTime = spec.startLocalTime,
                 scheduleType = spec.type,
+                daysOfWeek = spec.daysOfWeek,
+                startDate = spec.startDate,
                 memberCount = members
             )
         }

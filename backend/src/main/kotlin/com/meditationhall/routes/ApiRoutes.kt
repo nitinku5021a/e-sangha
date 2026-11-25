@@ -12,6 +12,7 @@ import com.meditationhall.dto.SupporterProfileBody
 import com.meditationhall.dto.TimeResponse
 import com.meditationhall.dto.WsEvent
 import com.meditationhall.realtime.RealtimeHub
+import com.meditationhall.realtime.VoiceRelay
 import com.meditationhall.services.CommunityService
 import com.meditationhall.services.HallService
 import com.meditationhall.services.SessionService
@@ -19,7 +20,10 @@ import com.meditationhall.services.SupportService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readByteArray
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -38,7 +42,8 @@ fun Route.apiRoutes(
     sessions: SessionService,
     support: SupportService,
     community: CommunityService,
-    hub: RealtimeHub
+    hub: RealtimeHub,
+    voice: VoiceRelay
 ) {
     val json = Json { ignoreUnknownKeys = true }
 
@@ -164,6 +169,30 @@ fun Route.apiRoutes(
             val user = auth.requireUser(call.request.header("Authorization"))
             sessions.leave(user, UUID.fromString(call.parameters["id"]))
             call.respond(HttpStatusCode.NoContent)
+        }
+        post("/sessions/{id}/voice") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            val sessionId = UUID.fromString(call.parameters["id"])
+            val (creatorId, endMillis) = sessions.voiceGate(sessionId)
+            if (creatorId != user) {
+                throw com.meditationhall.ApiException(
+                    HttpStatusCode.Forbidden,
+                    "NOT_CREATOR",
+                    "Only the hall creator can speak in this hall."
+                )
+            }
+            val seq = call.request.queryParameters["seq"]?.toIntOrNull()
+                ?: throw com.meditationhall.ApiException(HttpStatusCode.BadRequest, "VOICE_SEQ", "Missing voice sequence.")
+            val ended = call.request.queryParameters["ended"] == "true"
+            val bytes = call.receiveChannel().readRemaining().readByteArray()
+            voice.publish(sessionId, endMillis, seq, bytes, ended)
+            call.respond(mapOf("seq" to seq))
+        }
+        get("/sessions/{id}/voice") {
+            auth.requireUser(call.request.header("Authorization"))
+            val sessionId = UUID.fromString(call.parameters["id"])
+            val after = call.request.queryParameters["after"]?.toIntOrNull() ?: 0
+            call.respond(voice.poll(sessionId, after))
         }
 
         get("/me/meditation-log") {

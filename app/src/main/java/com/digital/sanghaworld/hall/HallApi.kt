@@ -60,6 +60,15 @@ class HallApi(
 
     fun me(): JSONObject = request("GET", "/v1/me")
 
+    fun postVoice(sessionId: String, seq: Int, ended: Boolean, bytes: ByteArray) {
+        val path = "/v1/sessions/$sessionId/voice?seq=$seq&ended=$ended"
+        val raw = requestBinary("POST", path, bytes)
+        if (raw.isNotBlank()) JSONObject(raw)
+    }
+
+    fun pollVoice(sessionId: String, after: Int): JSONObject =
+        request("GET", "/v1/sessions/$sessionId/voice?after=$after")
+
     fun updateDisplayName(name: String) {
         request(
             "PATCH",
@@ -354,7 +363,11 @@ class HallApi(
             scheduleType = runCatching { ScheduleType.valueOf(o.optString("scheduleType", "DAILY")) }
                 .getOrDefault(ScheduleType.DAILY),
             startLocalTime = LocalTime.parse(if (time.length == 5) time else "06:00"),
-            timezone = hall.timezone
+            timezone = hall.timezone,
+            daysOfWeek = o.optString("daysOfWeek").split(',')
+                .mapNotNull { runCatching { java.time.DayOfWeek.valueOf(it.trim()) }.getOrNull() }
+                .toSet(),
+            startDate = o.optString("startDate").takeIf { it.isNotBlank() }?.let { java.time.LocalDate.parse(it) }
         )
         val remaining = if (o.has("remainingSeconds") && !o.isNull("remainingSeconds")) o.optLong("remainingSeconds") else null
         return HallCard(
@@ -407,6 +420,28 @@ class HallApi(
         val raw = requestRaw(method, path, null, true)
         if (raw.isBlank()) return JSONArray()
         return JSONArray(raw)
+    }
+
+    private fun requestBinary(method: String, path: String, bytes: ByteArray, retried: Boolean = false): String {
+        val conn = (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = 15000
+            readTimeout = 20000
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Content-Type", "application/octet-stream")
+            tokens.accessToken?.let { setRequestProperty("Authorization", "Bearer $it") }
+            doInput = true
+            doOutput = true
+            outputStream.use { it.write(bytes) }
+        }
+        val code = conn.responseCode
+        val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+        val text = stream?.bufferedReader()?.readText().orEmpty()
+        if (code == 401 && !retried && refreshSession()) {
+            return requestBinary(method, path, bytes, retried = true)
+        }
+        if (code !in 200..299) throw IllegalStateException("HTTP $code: $text")
+        return text
     }
 
     private fun requestRaw(method: String, path: String, body: JSONObject?, auth: Boolean, retried: Boolean = false): String {

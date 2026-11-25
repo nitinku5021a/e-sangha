@@ -62,6 +62,16 @@ class SessionService(private val hub: RealtimeHub) {
 
     fun get(sessionId: UUID): SessionDto = transaction { toDto(sessionId) }
 
+    /** Hall creator and the instant the scheduled sitting ends. */
+    fun voiceGate(sessionId: UUID): Pair<UUID, Long> = transaction {
+        val session = MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
+            ?: throw ApiException(HttpStatusCode.NotFound, "SESSION_NOT_FOUND", "Session not found.")
+        val hall = Halls.selectAll().first { it[Halls.id] == session[MeditationSessions.hallId] }
+        val endMillis = session[MeditationSessions.scheduledStart].toEpochMilli() +
+            session[MeditationSessions.durationSeconds] * 1000L
+        hall[Halls.creatorId] to endMillis
+    }
+
     fun participants(sessionId: UUID): List<ParticipantDto> = transaction {
         MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
             ?: throw ApiException(HttpStatusCode.NotFound, "SESSION_NOT_FOUND", "Session not found.")

@@ -100,6 +100,8 @@ data class HallDto(
     val joined: Boolean = false,
     val startLocalTime: String? = null,
     val scheduleType: String? = null,
+    val daysOfWeek: String? = null,
+    val startDate: String? = null,
     val memberCount: Int = 0
 )
 
@@ -186,6 +188,19 @@ data class RelationshipDto(
     val supporterId: String,
     val supportedUserId: String,
     val sessionCount: Int
+)
+
+@Serializable
+data class VoiceClipDto(
+    val seq: Int,
+    val audioBase64: String
+)
+
+@Serializable
+data class VoicePollDto(
+    val speaking: Boolean,
+    val ended: Boolean,
+    val clips: List<VoiceClipDto> = emptyList()
 )
 
 @Serializable

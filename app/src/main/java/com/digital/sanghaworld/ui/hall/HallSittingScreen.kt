@@ -22,6 +22,10 @@ fun HallSittingScreen(
     onToggleFocus: () -> Unit,
     onMoreDetails: () -> Unit,
     onOpenTimer: () -> Unit = {},
+    canSpeak: Boolean = false,
+    micOpen: Boolean = false,
+    hostSpeaking: Boolean = false,
+    onSpeakToggle: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -41,6 +45,10 @@ fun HallSittingScreen(
         onToggleFocus = onToggleFocus,
         onMoreDetails = onMoreDetails,
         onOpenTimer = onOpenTimer,
+        canSpeak = canSpeak,
+        micOpen = micOpen,
+        hostSpeaking = hostSpeaking,
+        onSpeakToggle = onSpeakToggle,
         onBack = onBack,
         modifier = modifier
     )

@@ -9,7 +9,9 @@ import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -47,6 +49,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,7 +70,10 @@ import com.digital.sanghaworld.ui.DrawerMenuItem
 import com.digital.sanghaworld.billing.DonationViewModel
 import com.digital.sanghaworld.ui.SupportScreen
 import com.digital.sanghaworld.auth.AuthViewModel
+import com.digital.sanghaworld.auth.TokenStore
+import com.digital.sanghaworld.hall.HallApi
 import com.digital.sanghaworld.hall.HallViewModel
+import com.digital.sanghaworld.hall.HallVoiceController
 import com.digital.sanghaworld.hall.SittingAlarms
 import com.digital.sanghaworld.hall.ScheduleType
 import com.digital.sanghaworld.logging.MeditationLogStore
@@ -196,6 +202,40 @@ fun VipassanaApp(
     var detailsFromRoom by remember { mutableStateOf(false) }
     var hallMuted by remember { mutableStateOf(false) }
     var hallFocus by remember { mutableStateOf(false) }
+    val hallVoice = remember {
+        HallVoiceController(context.applicationContext, HallApi(TokenStore(context.applicationContext)))
+    }
+    val hostSpeaking by hallVoice.hostSpeaking.collectAsState()
+    val micOpen by hallVoice.micOpen.collectAsState()
+    val voiceSession = hallViewModel.activeSessionId
+    val voiceCreator = hallUi.profile?.id != null && hallUi.selectedHall?.creatorId == hallUi.profile?.id
+    val canSpeak = voiceCreator && hallUi.meditating && voiceSession != null
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    DisposableEffect(hallVoice) {
+        onDispose { hallVoice.close() }
+    }
+    LaunchedEffect(voiceSession, hallUi.meditating, voiceCreator) {
+        if (hallUi.meditating && !voiceCreator && voiceSession != null) hallVoice.listen(voiceSession)
+        else hallVoice.listen(null)
+    }
+    var voiceLeftMark by remember { mutableLongStateOf(timeLeft) }
+    LaunchedEffect(timeLeft, isRunning) {
+        if (isRunning && voiceLeftMark > 0L && timeLeft <= 0L) hallVoice.releaseHold()
+        voiceLeftMark = timeLeft
+    }
+    val onSpeakToggle: () -> Unit = {
+        if (micOpen) hallVoice.releaseHold()
+        else {
+            val id = hallViewModel.activeSessionId
+            if (id != null) {
+                val granted = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) hallVoice.begin(id) else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
     val openingBell = remember { GongPreviewPlayer(context.applicationContext) }
     var startedSittingKey by remember { mutableStateOf<String?>(null) }
 
@@ -219,10 +259,20 @@ fun VipassanaApp(
         }
     }
 
+    val notifyPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(authState.signedIn) {
         if (!authState.ready) return@LaunchedEffect
-        if (authState.signedIn) hallViewModel.refresh()
-        else SittingAlarms.cancelAll(context)
+        if (authState.signedIn) {
+            hallViewModel.refresh()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } else {
+            SittingAlarms.cancelAll(context)
+        }
     }
     LaunchedEffect(hallPage, hallUi.inOpenHall) {
         if (hallPage != "community") return@LaunchedEffect
@@ -445,6 +495,10 @@ fun VipassanaApp(
                 onToggleFocus = { hallFocus = !hallFocus },
                 onMoreDetails = { detailsFromRoom = true; hallPage = "info" },
                 onOpenTimer = { showFullTimer = true },
+                canSpeak = canSpeak,
+                micOpen = micOpen,
+                hostSpeaking = hostSpeaking,
+                onSpeakToggle = onSpeakToggle,
                 onBack = {
                     hallViewModel.leaveMeditationSeat()
                     hallFocus = false
@@ -858,6 +912,10 @@ fun VipassanaApp(
                                     onToggleMute = { hallMuted = !hallMuted },
                                     onToggleFocus = { hallFocus = !hallFocus },
                                     onMoreDetails = { detailsFromRoom = true; hallPage = "info" },
+                                    canSpeak = canSpeak,
+                                    micOpen = micOpen,
+                                    hostSpeaking = hostSpeaking,
+                                    onSpeakToggle = onSpeakToggle,
                                     onBack = {
                                         if (hallOrigin == "directory") hallPage = "info"
                                         else {

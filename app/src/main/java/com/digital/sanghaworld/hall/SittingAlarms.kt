@@ -35,8 +35,7 @@ object SittingAlarms {
         val now = System.currentTimeMillis()
         val codes = mutableSetOf<String>()
         cards.filter { it.joined }.distinctBy { it.hall.id }.forEach { card ->
-            val start = card.nextStartMillis
-            if (start <= now) return@forEach
+            val start = futureStart(app, card, now) ?: return@forEach
             val remindAt = start - 15 * 60_000L
             if (remindAt > now) {
                 val code = schedule(app, manager, card, remindAt, KIND_REMIND)
@@ -76,9 +75,27 @@ object SittingAlarms {
         runCatching {
             manager.setAlarmClock(AlarmManager.AlarmClockInfo(atMillis, open), pending)
         }.onFailure {
-            runCatching { manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending) }
+            val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
+            val exact = if (exactAllowed) {
+                runCatching {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending)
+                    true
+                }.getOrDefault(false)
+            } else {
+                false
+            }
+            if (!exact) {
+                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending)
+            }
         }
         return code
+    }
+
+    /** The next sitting that has not started yet. A sitting already under way schedules the one after it. */
+    private fun futureStart(context: Context, card: HallCard, now: Long): Long? {
+        if (card.nextStartMillis > now) return card.nextStartMillis
+        val after = maxOf(now, card.nextStartMillis + card.hall.durationSeconds * 1000L)
+        return HallStore(context).nextOccurrence(card.schedule, card.hall.durationSeconds, after + 1)
     }
 
     private fun cancelStored(context: Context, manager: AlarmManager) {
@@ -134,6 +151,21 @@ class SittingAlarmReceiver : BroadcastReceiver() {
         if (start && !SittingAlarms.inHallForStart) {
             ring(context, intent.getStringExtra("gongId"))
         }
+        val pendingResult = goAsync()
+        Thread {
+            try {
+                val app = context.applicationContext
+                val tokens = TokenStore(app)
+                if (tokens.isSignedIn()) {
+                    val disc = runCatching { HallApi(tokens).halls() }.getOrNull()
+                    if (disc != null) {
+                        SittingAlarms.reschedule(app, disc.sittingNow + disc.startingSoon + disc.myHalls)
+                    }
+                }
+            } finally {
+                pendingResult.finish()
+            }
+        }.start()
     }
 
     private fun notify(context: Context, title: String, body: String, id: Int) {
@@ -165,7 +197,13 @@ class SittingAlarmReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
-        manager.notify(id, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        runCatching { manager.notify(id, notification) }
     }
 
     private fun ring(context: Context, gongId: String?) {
