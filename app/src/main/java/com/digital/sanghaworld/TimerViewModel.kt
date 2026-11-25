@@ -120,6 +120,8 @@ class TimerViewModel : ViewModel() {
         }
     }
 
+    fun elapsedMillis(): Long = timerService?.elapsedMillis() ?: 0L
+
     fun startTimer(
         context: Context,
         durationMillis: Long,

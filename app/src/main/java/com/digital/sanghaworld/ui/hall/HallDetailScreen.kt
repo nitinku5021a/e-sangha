@@ -67,6 +67,7 @@ import com.digital.sanghaworld.hall.AudioType
 import com.digital.sanghaworld.hall.camelCaseHallName
 import com.digital.sanghaworld.hall.CompletionStatus
 import com.digital.sanghaworld.hall.HallUiState
+import com.digital.sanghaworld.hall.MeditationLogEntry
 import com.digital.sanghaworld.hall.ScheduleType
 import com.digital.sanghaworld.ui.SanghaScreenPadding
 import com.digital.sanghaworld.ui.StatusText
@@ -194,7 +195,12 @@ fun HallDetailScreen(
     } else {
         ui.selectedParticipantCount
     }
-    val hallLogs = ui.logs.filter { it.hallId == hall.id }.take(8)
+    val hallLogs = ui.logs
+        .withIndex()
+        .filter { it.value.hallId == hall.id }
+        .sortedWith(compareByDescending<IndexedValue<MeditationLogEntry>> { it.value.date }.thenBy { it.index })
+        .take(4)
+        .map { it.value }
     val colors = MaterialTheme.colorScheme
     val pill = RoundedCornerShape(28.dp)
 

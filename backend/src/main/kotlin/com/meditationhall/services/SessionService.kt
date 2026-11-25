@@ -137,7 +137,7 @@ class SessionService(private val hub: RealtimeHub) {
         return dto.copy(participantCount = hub.count(sessionId).coerceAtLeast(dto.participantCount))
     }
 
-    fun leave(userId: UUID, sessionId: UUID, attendedSeconds: Int? = null) {
+    fun leave(userId: UUID, sessionId: UUID, attendedSeconds: Int? = null, clockFinished: Boolean = false) {
         transaction {
             val row = Attendance.selectAll().firstOrNull {
                 it[Attendance.sessionId] == sessionId && it[Attendance.userId] == userId && it[Attendance.leftAt] == null
@@ -156,7 +156,8 @@ class SessionService(private val hub: RealtimeHub) {
                 0
             }
             val seconds = (attendedSeconds ?: overlap).coerceIn(0, expected)
-            val status = if (seconds >= (expected * 0.9).toInt()) "COMPLETED" else "PARTIAL"
+            // Leaving the hall records this person only. The scheduled session stays open for the host.
+            val status = if (clockFinished) "COMPLETED" else "PARTIAL"
             Attendance.update({ Attendance.id eq row[Attendance.id] }) {
                 it[leftAt] = now()
                 it[lastSeenAt] = now()

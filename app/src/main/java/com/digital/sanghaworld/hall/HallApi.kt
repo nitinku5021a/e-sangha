@@ -238,9 +238,10 @@ class HallApi(
         }
     }
 
-    fun leaveSession(sessionId: String, attendedSeconds: Int) {
+    fun leaveSession(sessionId: String, attendedSeconds: Int, clockFinished: Boolean) {
         val seconds = attendedSeconds.coerceAtLeast(0)
-        request("POST", "/v1/sessions/$sessionId/leave?attendedSeconds=$seconds")
+        val finished = if (clockFinished) "true" else "false"
+        request("POST", "/v1/sessions/$sessionId/leave?attendedSeconds=$seconds&clockFinished=$finished")
     }
 
     fun logs(): List<MeditationLogEntry> {

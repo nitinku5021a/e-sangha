@@ -732,7 +732,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         return remainingMillis.coerceAtLeast(1_000L)
     }
 
-    fun completeSession(attendedMillis: Long) {
+    fun completeSession(attendedMillis: Long, clockFinished: Boolean = false) {
         val sessionId = activeSessionId ?: return
         val hallId = activeHallId ?: return
         val sitKey = "$hallId-${_state.value.selectedNextStart}"
@@ -751,7 +751,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         val attendedSec = (attendedMillis / 1000).toInt().coerceAtLeast(0)
         if (useRemote) {
             viewModelScope.launch(Dispatchers.IO) {
-                runCatching { api.leaveSession(sessionId, attendedSec) }
+                runCatching { api.leaveSession(sessionId, attendedSec, clockFinished) }
                 refresh()
             }
             return
@@ -759,9 +759,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         val now = SessionClock.nowMillis()
         mutate { s ->
             val hall = s.halls.firstOrNull { it.id == hallId }
-            val durationSeconds = hall?.durationSeconds ?: attendedSec
-            val threshold = (durationSeconds * 0.9).toInt()
-            val completion = if (attendedSec > 0 && attendedSec >= threshold) {
+            val completion = if (clockFinished && attendedSec > 0) {
                 CompletionStatus.COMPLETED
             } else {
                 CompletionStatus.PARTIAL

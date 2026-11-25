@@ -198,6 +198,9 @@ fun VipassanaApp(
     }
     var communityMinutes by remember { mutableStateOf(30) }
     var askCommunityExit by remember { mutableStateOf(false) }
+    var askHallExit by remember { mutableStateOf(false) }
+    var hallExitEndsSit by remember { mutableStateOf(false) }
+    var hallExitDropsMembership by remember { mutableStateOf(false) }
     var askQuitApp by remember { mutableStateOf(false) }
     var detailsFromRoom by remember { mutableStateOf(false) }
     var hallMuted by remember { mutableStateOf(false) }
@@ -339,7 +342,7 @@ fun VipassanaApp(
     }
 
     fun endSit() {
-        val attended = (totalDuration - timeLeft).coerceAtLeast(0)
+        val attended = viewModel.elapsedMillis().coerceAtLeast(0)
         hallVoice.releaseHold()
         startedSittingKey = null
         openingBell.stop()
@@ -369,7 +372,11 @@ fun VipassanaApp(
             hallPage == "community" -> askCommunityExit = true
             isRunning && hallPage == "info" -> hallPage = "detail"
             isRunning && hallUi.inOpenHall && hallPage != "community" -> hallPage = "community"
-            isRunning -> endSit()
+            isRunning -> {
+                hallExitEndsSit = true
+                hallExitDropsMembership = false
+                askHallExit = true
+            }
             isAwarenessRunning -> viewModel.stopAwareness(context)
             hasCompleted -> {
                 viewModel.clearCompletion()
@@ -388,6 +395,10 @@ fun VipassanaApp(
                 showProfile = true
             }
             showHalls && hallPage == "detail" && hallOrigin == "directory" -> hallPage = "info"
+            showHalls && hallPage == "detail" -> {
+                hallExitEndsSit = false
+                askHallExit = true
+            }
             showHalls && hallPage != "home" -> {
                 hallPage = "home"
                 hallViewModel.refresh()
@@ -408,6 +419,47 @@ fun VipassanaApp(
             },
             dismissButton = {
                 TextButton(onClick = { askQuitApp = false }) { Text("Stay") }
+            }
+        )
+    }
+
+    if (askHallExit) {
+        AlertDialog(
+            onDismissRequest = {
+                askHallExit = false
+                hallExitDropsMembership = false
+            },
+            title = { Text(if (hallExitEndsSit) "Leave this sitting?" else "Leave this hall?") },
+            text = {
+                Text(
+                    if (hallExitEndsSit) "Your sit will end if you leave."
+                    else "You will leave this hall."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    askHallExit = false
+                    val dropMembership = hallExitDropsMembership
+                    hallExitDropsMembership = false
+                    if (hallExitEndsSit) {
+                        endSit()
+                    } else if (hallOrigin == "directory") {
+                        hallPage = "info"
+                    } else {
+                        hallPage = "home"
+                        hallViewModel.refresh()
+                    }
+                    if (dropMembership) {
+                        hallUi.selectedHall?.id?.let { hallViewModel.leaveHall(it) }
+                        hallPage = "home"
+                    }
+                }) { Text("Leave") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    askHallExit = false
+                    hallExitDropsMembership = false
+                }) { Text("Stay") }
             }
         )
     }
@@ -467,7 +519,11 @@ fun VipassanaApp(
             HallDetailScreen(
                 ui = hallUi,
                 onJoin = { hallUi.selectedHall?.id?.let { hallViewModel.joinHall(it) } },
-                onLeave = { hallUi.selectedHall?.id?.let { hallViewModel.leaveHall(it) } },
+                onLeave = {
+                    hallExitEndsSit = true
+                    hallExitDropsMembership = true
+                    askHallExit = true
+                },
                 onEnter = { hallPage = "detail" },
                 onBack = { hallPage = "detail" },
                 onEdit = { hallPage = "edit" },
@@ -495,9 +551,9 @@ fun VipassanaApp(
                 focusMode = hallFocus,
                 onJoin = { hallViewModel.joinMeditation() },
                 onLeave = {
-                    hallViewModel.leaveMeditationSeat()
-                    hallFocus = false
-                    stopSit()
+                    hallExitEndsSit = true
+                    hallExitDropsMembership = false
+                    askHallExit = true
                 },
                 onToggleMute = { hallMuted = !hallMuted },
                 onToggleFocus = { hallFocus = !hallFocus },
@@ -508,9 +564,8 @@ fun VipassanaApp(
                 hostSpeaking = hostSpeaking,
                 onSpeakToggle = onSpeakToggle,
                 onBack = {
-                    hallViewModel.leaveMeditationSeat()
-                    hallFocus = false
-                    stopSit()
+                    hallExitEndsSit = true
+                    askHallExit = true
                 }
             )
         } else {
@@ -532,7 +587,7 @@ fun VipassanaApp(
         if (hasCompleted) {
             LaunchedEffect(hasCompleted, completionDuration) {
                 if (hallViewModel.activeSessionId != null) {
-                    hallViewModel.completeSession(completionDuration)
+                    hallViewModel.completeSession(completionDuration, clockFinished = true)
                 }
             }
             CompletionScreen(
@@ -909,11 +964,12 @@ fun VipassanaApp(
                                         }
                                     },
                                     onLeaveMeditation = {
-                                        hallViewModel.leaveMeditationSeat()
-                                        hallFocus = false
                                         if (isRunning) {
-                                            endSit()
+                                            hallExitEndsSit = true
+                                            askHallExit = true
                                         } else {
+                                            hallViewModel.leaveMeditationSeat()
+                                            hallFocus = false
                                             startedSittingKey = null
                                         }
                                     },
@@ -925,11 +981,8 @@ fun VipassanaApp(
                                     hostSpeaking = hostSpeaking,
                                     onSpeakToggle = onSpeakToggle,
                                     onBack = {
-                                        if (hallOrigin == "directory") hallPage = "info"
-                                        else {
-                                            hallPage = "home"
-                                            hallViewModel.refresh()
-                                        }
+                                        hallExitEndsSit = isRunning
+                                        askHallExit = true
                                     },
                                     onNavHome = { showHome() },
                                     onNavHalls = { hallPage = "home" },

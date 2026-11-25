@@ -35,6 +35,7 @@ class TimerService : Service() {
     private var endGongCompleteRunnable: Runnable? = null
     private var hasPlayedPreEndDong = false
     private var hasLoggedSession = false
+    private var stopRequested = false
 
     private val _timeLeftInMillis = MutableStateFlow(0L)
     val timeLeftInMillis: StateFlow<Long> = _timeLeftInMillis.asStateFlow()
@@ -130,6 +131,7 @@ class TimerService : Service() {
         if (_isTimerRunning.value) return
         hasPlayedPreEndDong = false
         hasLoggedSession = false
+        stopRequested = false
         _hasCompleted.value = false
         _completionTitle.value = "Session Complete"
         _completionDuration.value = 0L
@@ -162,9 +164,11 @@ class TimerService : Service() {
 
     private fun beginMainTimer(durationMillis: Long, playStartGong: Boolean = true) {
         _isInPrep.value = false
+        _timeLeftInMillis.value = durationMillis
         if (playStartGong) playSelectedGong()
         timer = object : CountDownTimer(durationMillis, 1000) {
             override fun onTick(millisUntilFinished: Long) {
+                if (stopRequested) return
                 _timeLeftInMillis.value = millisUntilFinished
                 updateNotification("Time remaining: ${formatTime(millisUntilFinished)}")
                 if (!hasPlayedPreEndDong &&
@@ -177,6 +181,7 @@ class TimerService : Service() {
             }
 
             override fun onFinish() {
+                if (stopRequested) return
                 _timeLeftInMillis.value = 0
                 logSession(durationMillis)
                 hasLoggedSession = true
@@ -204,8 +209,16 @@ class TimerService : Service() {
         _completionDuration.value = 0L
     }
 
+    fun elapsedMillis(): Long {
+        val total = _totalDurationInMillis.value
+        val left = _timeLeftInMillis.value
+        if (left <= 0L) return if (_hasCompleted.value) total.coerceAtLeast(0L) else 0L
+        return (total - left).coerceIn(0L, total)
+    }
+
     fun stopTimer() {
-        val elapsed = _totalDurationInMillis.value - _timeLeftInMillis.value
+        stopRequested = true
+        val elapsed = elapsedMillis()
         if (!hasLoggedSession && elapsed > 0) {
             logSession(elapsed)
             hasLoggedSession = true

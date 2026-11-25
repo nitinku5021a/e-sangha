@@ -168,7 +168,8 @@ fun Route.apiRoutes(
         post("/sessions/{id}/leave") {
             val user = auth.requireUser(call.request.header("Authorization"))
             val attended = call.request.queryParameters["attendedSeconds"]?.toIntOrNull()
-            sessions.leave(user, UUID.fromString(call.parameters["id"]), attended)
+            val clockFinished = call.request.queryParameters["clockFinished"] == "true"
+            sessions.leave(user, UUID.fromString(call.parameters["id"]), attended, clockFinished)
             call.respond(HttpStatusCode.NoContent)
         }
         post("/sessions/{id}/voice") {
