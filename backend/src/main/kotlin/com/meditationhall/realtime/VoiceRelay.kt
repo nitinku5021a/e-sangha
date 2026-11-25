@@ -18,6 +18,8 @@ class VoiceRelay {
     private class Clip(val seq: Int, val bytes: ByteArray, val at: Long)
     private class Buffer {
         val clips = ArrayDeque<Clip>()
+        var segment = 0L
+        var nextSeq = 0
         var opened = false
         var ended = false
         var endMillis = 0L
@@ -26,7 +28,7 @@ class VoiceRelay {
 
     private val sessions = ConcurrentHashMap<UUID, Buffer>()
 
-    fun publish(sessionId: UUID, sittingEndMillis: Long, seq: Int, bytes: ByteArray, ended: Boolean) {
+    fun publish(sessionId: UUID, sittingEndMillis: Long, segment: Long, bytes: ByteArray, ended: Boolean) {
         val now = System.currentTimeMillis()
         val buffer = sessions.computeIfAbsent(sessionId) { Buffer() }
         synchronized(buffer) {
@@ -38,21 +40,25 @@ class VoiceRelay {
             if (!buffer.opened && now > sittingEndMillis) {
                 throw ApiException(HttpStatusCode.Conflict, "VOICE_CLOSED", "The sitting has ended.")
             }
-            if (buffer.ended && bytes.isNotEmpty()) {
-                throw ApiException(HttpStatusCode.Conflict, "VOICE_ENDED", "This broadcast has ended.")
+            // A late clip or ended marker from an earlier Speak tap must not close the new one.
+            if (buffer.segment > 0 && segment < buffer.segment) return
+            if (segment > buffer.segment) {
+                buffer.segment = segment
+                buffer.ended = false
             }
             if (bytes.size > MAX_BYTES) {
                 throw ApiException(HttpStatusCode.PayloadTooLarge, "VOICE_TOO_LARGE", "Voice clip is too large.")
             }
             buffer.opened = true
             if (bytes.isNotEmpty()) {
-                buffer.clips.addLast(Clip(seq, bytes, now))
+                buffer.nextSeq += 1
+                buffer.clips.addLast(Clip(buffer.nextSeq, bytes, now))
                 buffer.lastAt = now
                 while (buffer.clips.isNotEmpty() && now - buffer.clips.first().at > WINDOW_MS) {
                     buffer.clips.removeFirst()
                 }
             }
-            if (ended) buffer.ended = true
+            if (ended && segment == buffer.segment) buffer.ended = true
         }
     }
 

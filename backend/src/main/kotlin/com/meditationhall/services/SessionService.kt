@@ -67,8 +67,11 @@ class SessionService(private val hub: RealtimeHub) {
         val session = MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
             ?: throw ApiException(HttpStatusCode.NotFound, "SESSION_NOT_FOUND", "Session not found.")
         val hall = Halls.selectAll().first { it[Halls.id] == session[MeditationSessions.hallId] }
-        val endMillis = session[MeditationSessions.scheduledStart].toEpochMilli() +
-            session[MeditationSessions.durationSeconds] * 1000L
+        val startMillis = session[MeditationSessions.scheduledStart].toEpochMilli()
+        if (System.currentTimeMillis() < startMillis) {
+            throw ApiException(HttpStatusCode.Conflict, "VOICE_NOT_STARTED", "The sitting has not started.")
+        }
+        val endMillis = startMillis + session[MeditationSessions.durationSeconds] * 1000L
         hall[Halls.creatorId] to endMillis
     }
 
@@ -134,15 +137,25 @@ class SessionService(private val hub: RealtimeHub) {
         return dto.copy(participantCount = hub.count(sessionId).coerceAtLeast(dto.participantCount))
     }
 
-    fun leave(userId: UUID, sessionId: UUID) {
+    fun leave(userId: UUID, sessionId: UUID, attendedSeconds: Int? = null) {
         transaction {
             val row = Attendance.selectAll().firstOrNull {
                 it[Attendance.sessionId] == sessionId && it[Attendance.userId] == userId && it[Attendance.leftAt] == null
             } ?: return@transaction
             val joined = row[Attendance.joinedAt]
-            val seconds = java.time.Duration.between(joined, Instant.now()).seconds.toInt().coerceAtLeast(0)
             val session = MeditationSessions.selectAll().first { it[MeditationSessions.id] == sessionId }
             val expected = session[MeditationSessions.durationSeconds]
+            val start = session[MeditationSessions.scheduledStart]
+            val end = start.plusSeconds(expected.toLong())
+            val nowInstant = Instant.now()
+            val windowStart = if (joined.isBefore(start)) start else joined
+            val windowEnd = if (nowInstant.isAfter(end)) end else nowInstant
+            val overlap = if (windowEnd.isAfter(windowStart)) {
+                java.time.Duration.between(windowStart, windowEnd).seconds.toInt()
+            } else {
+                0
+            }
+            val seconds = (attendedSeconds ?: overlap).coerceIn(0, expected)
             val status = if (seconds >= (expected * 0.9).toInt()) "COMPLETED" else "PARTIAL"
             Attendance.update({ Attendance.id eq row[Attendance.id] }) {
                 it[leftAt] = now()
@@ -150,6 +163,7 @@ class SessionService(private val hub: RealtimeHub) {
                 it[attendedDurationSeconds] = seconds
                 it[completionStatus] = status
             }
+            if (seconds <= 0) return@transaction
             val hall = Halls.selectAll().first { it[Halls.id] == session[MeditationSessions.hallId] }
             MeditationLogs.insert {
                 it[id] = uuid()

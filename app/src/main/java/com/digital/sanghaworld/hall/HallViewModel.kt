@@ -748,9 +748,10 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
             meditating = false
         )
         leaveMeditationSeat()
+        val attendedSec = (attendedMillis / 1000).toInt().coerceAtLeast(0)
         if (useRemote) {
             viewModelScope.launch(Dispatchers.IO) {
-                runCatching { api.leaveSession(sessionId) }
+                runCatching { api.leaveSession(sessionId, attendedSec) }
                 refresh()
             }
             return
@@ -758,10 +759,13 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         val now = SessionClock.nowMillis()
         mutate { s ->
             val hall = s.halls.firstOrNull { it.id == hallId }
-            val durationSeconds = hall?.durationSeconds ?: (attendedMillis / 1000).toInt()
-            val attendedSec = (attendedMillis / 1000).toInt().coerceAtLeast(1)
+            val durationSeconds = hall?.durationSeconds ?: attendedSec
             val threshold = (durationSeconds * 0.9).toInt()
-            val completion = if (attendedSec >= threshold) CompletionStatus.COMPLETED else CompletionStatus.PARTIAL
+            val completion = if (attendedSec > 0 && attendedSec >= threshold) {
+                CompletionStatus.COMPLETED
+            } else {
+                CompletionStatus.PARTIAL
+            }
             val updatedAttendance = s.attendance.map {
                 if (it.sessionId == sessionId && it.userId == s.profile.id && it.leftAtMillis == null) {
                     it.copy(
@@ -771,6 +775,7 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 } else it
             }
+            if (attendedSec <= 0) return@mutate s.copy(attendance = updatedAttendance)
             val log = MeditationLogEntry(
                 id = HallIds.newId(),
                 userId = s.profile.id,

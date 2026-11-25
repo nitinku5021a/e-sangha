@@ -167,7 +167,8 @@ fun Route.apiRoutes(
         }
         post("/sessions/{id}/leave") {
             val user = auth.requireUser(call.request.header("Authorization"))
-            sessions.leave(user, UUID.fromString(call.parameters["id"]))
+            val attended = call.request.queryParameters["attendedSeconds"]?.toIntOrNull()
+            sessions.leave(user, UUID.fromString(call.parameters["id"]), attended)
             call.respond(HttpStatusCode.NoContent)
         }
         post("/sessions/{id}/voice") {
@@ -181,12 +182,11 @@ fun Route.apiRoutes(
                     "Only the hall creator can speak in this hall."
                 )
             }
-            val seq = call.request.queryParameters["seq"]?.toIntOrNull()
-                ?: throw com.meditationhall.ApiException(HttpStatusCode.BadRequest, "VOICE_SEQ", "Missing voice sequence.")
+            val segment = call.request.queryParameters["segment"]?.toLongOrNull()?.takeIf { it > 0L } ?: 1L
             val ended = call.request.queryParameters["ended"] == "true"
             val bytes = call.receiveChannel().readRemaining().readByteArray()
-            voice.publish(sessionId, endMillis, seq, bytes, ended)
-            call.respond(mapOf("seq" to seq))
+            voice.publish(sessionId, endMillis, segment, bytes, ended)
+            call.respond(mapOf("ok" to true))
         }
         get("/sessions/{id}/voice") {
             auth.requireUser(call.request.header("Authorization"))

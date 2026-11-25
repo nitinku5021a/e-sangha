@@ -7,24 +7,30 @@ import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * One-way hall speech. The creator records short clips. Other sitters poll and play them.
@@ -34,7 +40,8 @@ class HallVoiceController(context: Context, private val api: HallApi) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val holding = AtomicBoolean(false)
-    private val seq = AtomicInteger(0)
+    private val segment = AtomicLong(0)
+    private val micGate = Mutex()
     private var recordJob: Job? = null
     private var listenJob: Job? = null
     private var listenSession: String? = null
@@ -43,6 +50,7 @@ class HallVoiceController(context: Context, private val api: HallApi) {
     private var player: ExoPlayer? = null
     private val queue = ArrayDeque<File>()
     private var playing = false
+    private var activeToken: String? = null
     private var currentFile: File? = null
 
     private val _hostSpeaking = MutableStateFlow(false)
@@ -52,42 +60,62 @@ class HallVoiceController(context: Context, private val api: HallApi) {
 
     fun begin(sessionId: String) {
         if (!holding.compareAndSet(false, true)) return
-        seq.set(0)
+        val seg = System.currentTimeMillis().coerceAtLeast(segment.get() + 1L)
+        segment.set(seg)
         _micOpen.value = true
         recordJob = scope.launch {
-            val recorder = openMic()
+            val pending = Channel<ByteArray>(8)
+            val uploader = launch {
+                for (pcm in pending) postClip(sessionId, seg, pcm)
+            }
             try {
-                if (recorder == null) return@launch
-                recorder.startRecording()
-                launch { runCatching { api.postVoice(sessionId, seq = 0, ended = false, bytes = ByteArray(0)) } }
-                val buf = ByteArray(recorder.bufferSizeInFrames.coerceAtLeast(1024) * 2)
-                val chunk = ByteArrayOutputStream()
-                var chunkStart = System.nanoTime()
-                while (isActive && holding.get()) {
-                    val read = recorder.read(buf, 0, buf.size)
-                    if (read > 0) chunk.write(buf, 0, read)
-                    val elapsed = System.nanoTime() - chunkStart
-                    if (elapsed >= 2_000_000_000L && chunk.size() > 0) {
-                        sendClip(sessionId, chunk.toByteArray())
-                        chunk.reset()
-                        chunkStart = System.nanoTime()
+                micGate.withLock {
+                    if (!holding.get() || segment.get() != seg) return@withLock
+                    val recorder = openMic()
+                    try {
+                        if (recorder == null) return@withLock
+                        recorder.startRecording()
+                        val buf = ByteArray(recorder.bufferSizeInFrames.coerceAtLeast(1024) * 2)
+                        val chunk = ByteArrayOutputStream()
+                        var chunkStart = System.nanoTime()
+                        while (isActive && holding.get() && segment.get() == seg) {
+                            val read = recorder.read(buf, 0, buf.size)
+                            if (read < 0) break
+                            if (read > 0) chunk.write(buf, 0, read)
+                            val elapsed = System.nanoTime() - chunkStart
+                            if (elapsed >= 2_000_000_000L && chunk.size() > 0) {
+                                pending.trySend(chunk.toByteArray())
+                                chunk.reset()
+                                chunkStart = System.nanoTime()
+                            }
+                        }
+                        if (segment.get() == seg && chunk.size() > 0) pending.trySend(chunk.toByteArray())
+                    } finally {
+                        runCatching { recorder?.stop() }
+                        runCatching { recorder?.release() }
                     }
                 }
-                if (chunk.size() > 0) sendClip(sessionId, chunk.toByteArray())
-                val n = seq.incrementAndGet()
-                runCatching { api.postVoice(sessionId, seq = n, ended = true, bytes = ByteArray(0)) }
             } finally {
-                runCatching { recorder?.stop() }
-                runCatching { recorder?.release() }
-                holding.set(false)
-                _micOpen.value = false
+                pending.close()
+                uploader.join()
+                if (segment.get() == seg) {
+                    runCatching { api.postVoice(sessionId, segment = seg, ended = true, bytes = ByteArray(0)) }
+                    holding.set(false)
+                    _micOpen.value = false
+                }
             }
         }
     }
 
-    private fun sendClip(sessionId: String, pcm: ByteArray) {
-        val n = seq.incrementAndGet()
-        runCatching { api.postVoice(sessionId, seq = n, ended = false, bytes = wav(pcm)) }
+    private fun postClip(sessionId: String, seg: Long, pcm: ByteArray) {
+        val body = wav(pcm)
+        repeat(2) {
+            if (segment.get() != seg) return
+            val posted = runCatching {
+                api.postVoice(sessionId, segment = seg, ended = false, bytes = body)
+            }.isSuccess
+            if (posted) return
+        }
     }
 
     /** Finish the clip already being recorded and send the ended marker. */
@@ -127,7 +155,8 @@ class HallVoiceController(context: Context, private val api: HallApi) {
                         for (i in 0 until clips.length()) {
                             val clip = clips.getJSONObject(i)
                             val clipSeq = clip.optInt("seq")
-                            if (clipSeq > after) after = clipSeq
+                            if (clipSeq <= after) continue
+                            after = clipSeq
                             val encoded = clip.optString("audioBase64")
                             if (encoded.isNotBlank()) enqueue(encoded)
                         }
@@ -208,23 +237,43 @@ class HallVoiceController(context: Context, private val api: HallApi) {
         }
         playing = true
         currentFile = file
-        val exo = player ?: ExoPlayer.Builder(appContext).build().also { created ->
-            created.addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_ENDED) {
-                        synchronized(playerLock) {
-                            currentFile?.delete()
-                            currentFile = null
-                            playNextLocked()
-                        }
+        val token = System.nanoTime().toString()
+        activeToken = token
+        val exo = player ?: ExoPlayer.Builder(appContext)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
+                    .build(),
+                false
+            )
+            .build()
+            .also { created ->
+                created.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(state: Int) {
+                        if (state == Player.STATE_ENDED) finishClip(created.currentMediaItem?.mediaId)
                     }
-                }
-            })
-            player = created
-        }
-        exo.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
+
+                    override fun onPlayerError(error: PlaybackException) {
+                        finishClip(created.currentMediaItem?.mediaId)
+                    }
+                })
+                player = created
+            }
+        exo.setMediaItem(MediaItem.Builder().setUri(Uri.fromFile(file)).setMediaId(token).build())
         exo.prepare()
+        exo.playWhenReady = true
         exo.play()
+    }
+
+    private fun finishClip(token: String?) {
+        synchronized(playerLock) {
+            if (token == null || token != activeToken) return
+            activeToken = null
+            currentFile?.delete()
+            currentFile = null
+            playNextLocked()
+        }
     }
 
     private fun stopPlayback() {
@@ -235,6 +284,7 @@ class HallVoiceController(context: Context, private val api: HallApi) {
                 currentFile?.delete()
                 currentFile = null
                 playing = false
+                activeToken = null
                 player?.stop()
                 player?.clearMediaItems()
             }
@@ -248,6 +298,7 @@ class HallVoiceController(context: Context, private val api: HallApi) {
             currentFile?.delete()
             currentFile = null
             playing = false
+            activeToken = null
             player?.release()
             player = null
         }

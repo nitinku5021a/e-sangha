@@ -209,8 +209,11 @@ fun VipassanaApp(
     val micOpen by hallVoice.micOpen.collectAsState()
     val voiceSession = hallViewModel.activeSessionId
     val voiceCreator = hallUi.profile?.id != null && hallUi.selectedHall?.creatorId == hallUi.profile?.id
-    val canSpeak = voiceCreator && hallUi.meditating && voiceSession != null
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val canSpeak = voiceCreator && hallUi.meditating && voiceSession != null && isRunning && timeLeft > 0L
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val id = hallViewModel.activeSessionId
+        if (granted && id != null && isRunning && timeLeft > 0L) hallVoice.begin(id)
+    }
     DisposableEffect(hallVoice) {
         onDispose { hallVoice.close() }
     }
@@ -222,6 +225,10 @@ fun VipassanaApp(
     LaunchedEffect(timeLeft, isRunning) {
         if (isRunning && voiceLeftMark > 0L && timeLeft <= 0L) hallVoice.releaseHold()
         voiceLeftMark = timeLeft
+    }
+    val speakOnScreen = canSpeak && !showFullTimer && hallPage != "info" && hallPage != "community" && !hallUi.inOpenHall
+    LaunchedEffect(speakOnScreen) {
+        if (!speakOnScreen) hallVoice.releaseHold()
     }
     val onSpeakToggle: () -> Unit = {
         if (micOpen) hallVoice.releaseHold()
@@ -333,6 +340,7 @@ fun VipassanaApp(
 
     fun endSit() {
         val attended = (totalDuration - timeLeft).coerceAtLeast(0)
+        hallVoice.releaseHold()
         startedSittingKey = null
         openingBell.stop()
         HallGuidedAudioPlayer.stop()

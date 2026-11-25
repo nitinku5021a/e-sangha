@@ -60,8 +60,8 @@ class HallApi(
 
     fun me(): JSONObject = request("GET", "/v1/me")
 
-    fun postVoice(sessionId: String, seq: Int, ended: Boolean, bytes: ByteArray) {
-        val path = "/v1/sessions/$sessionId/voice?seq=$seq&ended=$ended"
+    fun postVoice(sessionId: String, segment: Long, ended: Boolean, bytes: ByteArray) {
+        val path = "/v1/sessions/$sessionId/voice?segment=$segment&ended=$ended"
         val raw = requestBinary("POST", path, bytes)
         if (raw.isNotBlank()) JSONObject(raw)
     }
@@ -238,8 +238,9 @@ class HallApi(
         }
     }
 
-    fun leaveSession(sessionId: String) {
-        request("POST", "/v1/sessions/$sessionId/leave")
+    fun leaveSession(sessionId: String, attendedSeconds: Int) {
+        val seconds = attendedSeconds.coerceAtLeast(0)
+        request("POST", "/v1/sessions/$sessionId/leave?attendedSeconds=$seconds")
     }
 
     fun logs(): List<MeditationLogEntry> {
