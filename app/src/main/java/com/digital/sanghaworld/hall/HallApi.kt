@@ -66,8 +66,10 @@ class HallApi(
         if (raw.isNotBlank()) JSONObject(raw)
     }
 
-    fun pollVoice(sessionId: String, after: Int): JSONObject =
-        request("GET", "/v1/sessions/$sessionId/voice?after=$after")
+    fun pollVoice(sessionId: String, after: Int, live: Boolean = false): JSONObject {
+        val liveQuery = if (live) "&live=true" else ""
+        return request("GET", "/v1/sessions/$sessionId/voice?after=$after$liveQuery")
+    }
 
     fun updateDisplayName(name: String) {
         request(
@@ -335,6 +337,13 @@ class HallApi(
 
     fun currentUserId(): String = tokens.userId.orEmpty()
 
+    private fun JSONObject.optNullableString(key: String): String? {
+        if (!has(key) || isNull(key)) return null
+        val text = optString(key)
+        if (text.isBlank() || text == "null") return null
+        return text
+    }
+
     private fun parseCards(arr: JSONArray?): List<HallCard> {
         if (arr == null) return emptyList()
         return (0 until arr.length()).map { parseCard(arr.getJSONObject(it)) }
@@ -364,10 +373,10 @@ class HallApi(
                 .getOrDefault(ScheduleType.DAILY),
             startLocalTime = LocalTime.parse(if (time.length == 5) time else "06:00"),
             timezone = hall.timezone,
-            daysOfWeek = o.optString("daysOfWeek").split(',')
+            daysOfWeek = o.optNullableString("daysOfWeek").orEmpty().split(',')
                 .mapNotNull { runCatching { java.time.DayOfWeek.valueOf(it.trim()) }.getOrNull() }
                 .toSet(),
-            startDate = o.optString("startDate").takeIf { it.isNotBlank() }?.let { java.time.LocalDate.parse(it) }
+            startDate = o.optNullableString("startDate")?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
         )
         val remaining = if (o.has("remainingSeconds") && !o.isNull("remainingSeconds")) o.optLong("remainingSeconds") else null
         return HallCard(

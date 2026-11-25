@@ -35,7 +35,7 @@ object SittingAlarms {
         val now = System.currentTimeMillis()
         val codes = mutableSetOf<String>()
         cards.filter { it.joined }.distinctBy { it.hall.id }.forEach { card ->
-            val start = futureStart(app, card, now) ?: return@forEach
+            val start = runCatching { futureStart(app, card, now) }.getOrNull() ?: return@forEach
             val remindAt = start - 15 * 60_000L
             if (remindAt > now) {
                 val code = schedule(app, manager, card, remindAt, KIND_REMIND)

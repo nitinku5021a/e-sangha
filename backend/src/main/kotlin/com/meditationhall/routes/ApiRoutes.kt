@@ -192,7 +192,8 @@ fun Route.apiRoutes(
             auth.requireUser(call.request.header("Authorization"))
             val sessionId = UUID.fromString(call.parameters["id"])
             val after = call.request.queryParameters["after"]?.toIntOrNull() ?: 0
-            call.respond(voice.poll(sessionId, after))
+            val live = call.request.queryParameters["live"] == "true"
+            call.respond(voice.poll(sessionId, after, live))
         }
 
         get("/me/meditation-log") {

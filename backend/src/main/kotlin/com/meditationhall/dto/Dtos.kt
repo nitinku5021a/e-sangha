@@ -200,6 +200,7 @@ data class VoiceClipDto(
 data class VoicePollDto(
     val speaking: Boolean,
     val ended: Boolean,
+    val latestSeq: Int = 0,
     val clips: List<VoiceClipDto> = emptyList()
 )
 

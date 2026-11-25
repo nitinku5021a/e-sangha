@@ -56,7 +56,7 @@ class VoiceRelay {
         }
     }
 
-    fun poll(sessionId: UUID, after: Int): VoicePollDto {
+    fun poll(sessionId: UUID, after: Int, live: Boolean = false): VoicePollDto {
         val now = System.currentTimeMillis()
         val buffer = sessions[sessionId] ?: return VoicePollDto(speaking = false, ended = false)
         synchronized(buffer) {
@@ -64,11 +64,13 @@ class VoiceRelay {
                 sessions.remove(sessionId, buffer)
                 return VoicePollDto(speaking = false, ended = true)
             }
+            val latest = buffer.clips.lastOrNull()?.seq ?: 0
+            val cursor = if (live) latest else after
             val clips = buffer.clips
-                .filter { it.seq > after }
+                .filter { it.seq > cursor }
                 .map { VoiceClipDto(seq = it.seq, audioBase64 = Base64.getEncoder().encodeToString(it.bytes)) }
             val speaking = buffer.opened && !buffer.ended && buffer.lastAt > 0 && now - buffer.lastAt < SPEAKING_GAP_MS
-            return VoicePollDto(speaking = speaking, ended = buffer.ended, clips = clips)
+            return VoicePollDto(speaking = speaking, ended = buffer.ended, latestSeq = latest, clips = clips)
         }
     }
 
