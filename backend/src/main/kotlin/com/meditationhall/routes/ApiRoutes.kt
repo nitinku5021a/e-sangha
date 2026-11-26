@@ -62,6 +62,10 @@ fun Route.apiRoutes(
             auth.logout(body.refreshToken)
             call.respond(HttpStatusCode.NoContent)
         }
+        post("/auth/name") {
+            val body = runCatching { call.receive<AuthRequest>() }.getOrDefault(AuthRequest())
+            call.respond(auth.loginWithName(body.displayName, body.email, body.password))
+        }
         post("/auth/dev") {
             val body = runCatching { call.receive<AuthRequest>() }.getOrDefault(AuthRequest())
             call.respond(auth.loginDev(body.displayName))

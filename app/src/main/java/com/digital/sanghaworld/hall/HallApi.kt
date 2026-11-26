@@ -30,6 +30,20 @@ class HallApi(
         return true
     }
 
+    fun loginWithName(displayName: String, email: String, password: String): Boolean {
+        val res = request(
+            "POST",
+            "/v1/auth/name",
+            JSONObject()
+                .put("displayName", displayName.trim())
+                .put("email", email.trim())
+                .put("password", password),
+            auth = false
+        )
+        saveTokens(res)
+        return true
+    }
+
     fun refreshSession(): Boolean = refreshSession(null)
 
     /**

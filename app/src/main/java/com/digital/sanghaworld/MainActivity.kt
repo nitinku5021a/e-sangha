@@ -300,7 +300,11 @@ fun VipassanaApp(
         return
     }
     if (!authState.signedIn) {
-        LoginScreen(state = authState, onGoogle = { authViewModel.signInWithGoogle(context) })
+        LoginScreen(
+            state = authState,
+            onGoogle = { authViewModel.signInWithGoogle(context) },
+            onName = { name, email, password -> authViewModel.signInWithName(name, email, password) }
+        )
         return
     }
 

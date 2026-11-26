@@ -84,6 +84,45 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun signInWithName(displayName: String, email: String, password: String) {
+        val name = displayName.trim()
+        val address = email.trim()
+        if (name.length < 2) {
+            _state.value = _state.value.copy(error = "Enter the name you want others to see.")
+            return
+        }
+        if (!address.matches(Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"))) {
+            _state.value = _state.value.copy(error = "Enter a valid email address.")
+            return
+        }
+        if (password.length < 8) {
+            _state.value = _state.value.copy(error = "Use a password of at least 8 characters.")
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(loading = true, error = null)
+            val login = withContext(Dispatchers.IO) {
+                runCatching { api.loginWithName(name, address, password) }
+            }
+            val ok = login.getOrDefault(false)
+            if (ok) {
+                withContext(Dispatchers.IO) { runCatching { api.syncTimezone() } }
+            }
+            val loginError = login.exceptionOrNull()?.message
+            _state.value = AuthUiState(
+                ready = true,
+                signedIn = ok,
+                displayName = tokens.displayName,
+                loading = false,
+                error = when {
+                    ok -> null
+                    !loginError.isNullOrBlank() -> loginError
+                    else -> "Could not reach the server."
+                }
+            )
+        }
+    }
+
     fun signOut() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { api.logout() }

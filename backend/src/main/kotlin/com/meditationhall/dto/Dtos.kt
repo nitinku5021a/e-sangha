@@ -3,7 +3,12 @@ package com.meditationhall.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class AuthRequest(val displayName: String = "You", val timezone: String = "")
+data class AuthRequest(
+    val displayName: String = "You",
+    val timezone: String = "",
+    val email: String = "",
+    val password: String = ""
+)
 
 @Serializable
 data class GoogleAuthRequest(val idToken: String, val device: String? = null)
