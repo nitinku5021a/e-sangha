@@ -16,6 +16,7 @@ class HallApi(
     private val tokens: TokenStore,
     private val baseUrl: String = httpsBase(BuildConfig.API_BASE_URL.ifBlank { DEFAULT_BASE })
 ) {
+    private val refreshLock = Any()
     fun isConfigured(): Boolean = tokens.isSignedIn()
 
     fun loginWithGoogle(idToken: String): Boolean {
@@ -29,18 +30,29 @@ class HallApi(
         return true
     }
 
-    fun refreshSession(): Boolean {
-        val refresh = tokens.refreshToken ?: return false
-        return runCatching {
-            val res = request(
-                "POST",
-                "/v1/auth/refresh",
-                JSONObject().put("refreshToken", refresh),
-                auth = false
-            )
-            saveTokens(res)
-            true
-        }.getOrDefault(false)
+    fun refreshSession(): Boolean = refreshSession(null)
+
+    /**
+     * Access tokens last 15 minutes. Sitting heartbeats overlap, so only one refresh
+     * may run at a time. A second caller waits and reuses the token the first saved.
+     * Refresh tokens are rotated, and a parallel refresh revokes the token still in use.
+     */
+    private fun refreshSession(failedAccess: String?): Boolean {
+        synchronized(refreshLock) {
+            val current = tokens.accessToken
+            if (failedAccess != null && !current.isNullOrBlank() && current != failedAccess) return true
+            val refresh = tokens.refreshToken ?: return false
+            return runCatching {
+                val res = request(
+                    "POST",
+                    "/v1/auth/refresh",
+                    JSONObject().put("refreshToken", refresh),
+                    auth = false
+                )
+                saveTokens(res)
+                true
+            }.getOrDefault(false)
+        }
     }
 
     fun deleteAccount() {
@@ -396,8 +408,12 @@ class HallApi(
         return parsePeople(res)
     }
 
-    fun communityJoin(): List<CommunitySitter> {
-        val res = request("POST", "/v1/community/join", JSONObject())
+    fun communityJoin(durationSeconds: Int): List<CommunitySitter> {
+        val res = request(
+            "POST",
+            "/v1/community/join",
+            JSONObject().put("durationSeconds", durationSeconds.coerceAtLeast(60))
+        )
         return parsePeople(res)
     }
 
@@ -405,8 +421,9 @@ class HallApi(
         request("POST", "/v1/community/heartbeat", JSONObject())
     }
 
-    fun communityLeave() {
-        request("POST", "/v1/community/leave", JSONObject())
+    fun communityLeave(attendedSeconds: Int) {
+        val seconds = attendedSeconds.coerceAtLeast(0)
+        request("POST", "/v1/community/leave?attendedSeconds=$seconds", JSONObject())
     }
 
     private fun parsePeople(res: JSONObject): List<CommunitySitter> {
@@ -448,7 +465,7 @@ class HallApi(
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.bufferedReader()?.readText().orEmpty()
-        if (code == 401 && !retried && refreshSession()) {
+        if (code == 401 && !retried && refreshSession(tokens.accessToken)) {
             return requestBinary(method, path, bytes, retried = true)
         }
         if (code !in 200..299) throw IllegalStateException("HTTP $code: $text")
@@ -472,7 +489,7 @@ class HallApi(
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.bufferedReader()?.readText().orEmpty()
-        if (code == 401 && auth && !retried && refreshSession()) {
+        if (code == 401 && auth && !retried && refreshSession(tokens.accessToken)) {
             return requestRaw(method, path, body, auth = true, retried = true)
         }
         if (code !in 200..299) {

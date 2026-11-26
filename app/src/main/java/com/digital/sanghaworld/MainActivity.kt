@@ -350,6 +350,8 @@ fun VipassanaApp(
         viewModel.stopTimer(context)
         if (hallViewModel.activeSessionId != null) {
             hallViewModel.completeSession(attended)
+        } else if (hallUi.inOpenHall) {
+            hallViewModel.finishOpenSit(attended)
         }
         hallViewModel.leaveMeditationSeat()
         hallFocus = false
@@ -472,8 +474,7 @@ fun VipassanaApp(
             confirmButton = {
                 TextButton(onClick = {
                     askCommunityExit = false
-                    hallViewModel.leaveCommunity()
-                    if (isRunning) endSit()
+                    if (isRunning) endSit() else hallViewModel.leaveCommunity()
                     hallFocus = false
                     hallPage = "home"
                 }) { Text("Leave room") }
@@ -482,8 +483,7 @@ fun VipassanaApp(
                 Row {
                     TextButton(onClick = {
                         askCommunityExit = false
-                        hallViewModel.leaveCommunity()
-                        if (isRunning) endSit()
+                        if (isRunning) endSit() else hallViewModel.leaveCommunity()
                         (context as Activity).finish()
                     }) { Text("Quit app") }
                     TextButton(onClick = { askCommunityExit = false }) { Text("Stay") }
@@ -588,6 +588,8 @@ fun VipassanaApp(
             LaunchedEffect(hasCompleted, completionDuration) {
                 if (hallViewModel.activeSessionId != null) {
                     hallViewModel.completeSession(completionDuration, clockFinished = true)
+                } else if (hallUi.inOpenHall) {
+                    hallViewModel.finishOpenSit(completionDuration)
                 }
             }
             CompletionScreen(
@@ -861,8 +863,8 @@ fun VipassanaApp(
                                 sittingCount = hallUi.communityCount,
                                 onMinutes = { communityMinutes = it },
                                 onStart = {
-                                    hallViewModel.enterCommunity()
                                     val length = communityMinutes * 60_000L
+                                    hallViewModel.enterCommunity(communityMinutes * 60)
                                     viewModel.startTimer(context, length, skipPrep = true)
                                 },
                                 modifier = Modifier.padding(innerPadding)

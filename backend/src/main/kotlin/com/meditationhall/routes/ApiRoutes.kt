@@ -2,6 +2,7 @@ package com.meditationhall.routes
 
 import com.meditationhall.auth.AuthService
 import com.meditationhall.dto.AuthRequest
+import com.meditationhall.dto.CommunityJoinRequest
 import com.meditationhall.dto.CreateHallRequest
 import com.meditationhall.dto.UpdateHallRequest
 import com.meditationhall.dto.GoogleAuthRequest
@@ -88,7 +89,8 @@ fun Route.apiRoutes(
         }
         post("/community/join") {
             val user = auth.requireUser(call.request.header("Authorization"))
-            call.respond(community.join(user))
+            val body = runCatching { call.receive<CommunityJoinRequest>() }.getOrDefault(CommunityJoinRequest())
+            call.respond(community.join(user, body.durationSeconds))
         }
         post("/community/heartbeat") {
             val user = auth.requireUser(call.request.header("Authorization"))
@@ -97,7 +99,8 @@ fun Route.apiRoutes(
         }
         post("/community/leave") {
             val user = auth.requireUser(call.request.header("Authorization"))
-            community.leave(user)
+            val attended = call.request.queryParameters["attendedSeconds"]?.toIntOrNull()
+            community.leave(user, attended)
             call.respond(HttpStatusCode.NoContent)
         }
 

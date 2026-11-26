@@ -234,6 +234,7 @@ class SessionService(private val hub: RealtimeHub) {
     }
 
     fun tickLifecycle() {
+        val ended = mutableListOf<Pair<UUID, UUID>>()
         transaction {
             val now = Instant.now()
             MeditationSessions.selectAll().forEach { row ->
@@ -259,23 +260,29 @@ class SessionService(private val hub: RealtimeHub) {
                             )
                         }
                     }
-                    row[MeditationSessions.status] in listOf("SCHEDULED", "STARTING", "ACTIVE") && !now.isBefore(end) -> {
-                        MeditationSessions.update({ MeditationSessions.id eq id }) { it[status] = "COMPLETED" }
-                        runBlocking {
-                            hub.broadcast(
-                                WsEvent(
-                                    type = "SESSION_COMPLETED",
-                                    sessionId = id.toString(),
-                                    hallId = row[MeditationSessions.hallId].toString(),
-                                    status = "COMPLETED",
-                                    serverTimeMillis = System.currentTimeMillis()
+                    !now.isBefore(end) -> {
+                        if (row[MeditationSessions.status] in listOf("SCHEDULED", "STARTING", "ACTIVE")) {
+                            MeditationSessions.update({ MeditationSessions.id eq id }) { it[status] = "COMPLETED" }
+                            runBlocking {
+                                hub.broadcast(
+                                    WsEvent(
+                                        type = "SESSION_COMPLETED",
+                                        sessionId = id.toString(),
+                                        hallId = row[MeditationSessions.hallId].toString(),
+                                        status = "COMPLETED",
+                                        serverTimeMillis = System.currentTimeMillis()
+                                    )
                                 )
-                            )
+                            }
                         }
+                        Attendance.selectAll()
+                            .filter { it[Attendance.sessionId] == id && it[Attendance.leftAt] == null }
+                            .forEach { ended += it[Attendance.userId] to id }
                     }
                 }
             }
         }
+        ended.forEach { (userId, sessionId) -> leave(userId, sessionId, null) }
     }
 
     private fun toDto(sessionId: UUID): SessionDto {

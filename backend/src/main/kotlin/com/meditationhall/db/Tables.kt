@@ -165,6 +165,8 @@ object CommunityPresence : Table("community_presence") {
     val displayName = varchar("display_name", 120)
     val joinedAt = timestamp("joined_at")
     val lastSeenAt = timestamp("last_seen_at")
+    /** Sit stays listed until this instant even if heartbeats stop. */
+    val presentUntil = timestamp("present_until").nullable()
     override val primaryKey = PrimaryKey(userId)
 }
 

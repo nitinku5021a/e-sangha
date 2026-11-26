@@ -17,7 +17,8 @@ import org.slf4j.LoggerFactory
 
 class SessionScheduler(
     private val sessions: SessionService,
-    private val halls: HallService
+    private val halls: HallService,
+    private val community: com.meditationhall.services.CommunityService
 ) {
     private val log = LoggerFactory.getLogger(SessionScheduler::class.java)
 
@@ -26,6 +27,7 @@ class SessionScheduler(
             while (true) {
                 runCatching {
                     sessions.tickLifecycle()
+                    community.expire()
                     generateUpcoming()
                     reminderPass()
                 }.onFailure { log.warn("scheduler tick failed", it) }

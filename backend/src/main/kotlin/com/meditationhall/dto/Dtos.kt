@@ -38,6 +38,9 @@ data class AuthResponse(val token: String, val userId: String, val displayName: 
 data class TimeResponse(val serverTimeMillis: Long)
 
 @Serializable
+data class CommunityJoinRequest(val durationSeconds: Int = 3600)
+
+@Serializable
 data class CommunityPerson(val userId: String, val displayName: String, val joinedAtMillis: Long = 0)
 
 @Serializable

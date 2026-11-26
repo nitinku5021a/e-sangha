@@ -51,7 +51,7 @@ fun Application.module() {
     val sessions = SessionService(hub)
     val support = SupportService()
     val community = CommunityService()
-    SessionScheduler(sessions, halls).start()
+    SessionScheduler(sessions, halls, community).start()
     NetworkPresence.start()
 
     install(CallId) {

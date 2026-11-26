@@ -60,6 +60,8 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         private set
     private var assignedSeatId: Int? = null
     private var localCommunityJoinedAt: Long = 0
+    private var openSitSeconds: Int = 0
+    private var openSitLogged: Boolean = false
 
     init {
         refresh()
@@ -143,14 +145,16 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun enterCommunity() {
+    fun enterCommunity(durationSeconds: Int) {
         if (localCommunityJoinedAt == 0L) localCommunityJoinedAt = System.currentTimeMillis()
+        openSitSeconds = durationSeconds.coerceAtLeast(60)
+        openSitLogged = false
         _state.value = _state.value.copy(inOpenHall = true)
         viewModelScope.launch {
             val remote = withContext(Dispatchers.IO) {
                 runCatching {
                     connectRemote()
-                    if (useRemote) api.communityJoin() else emptyList()
+                    if (useRemote) api.communityJoin(openSitSeconds) else emptyList()
                 }.getOrDefault(emptyList())
             }
             applyCommunity(remote)
@@ -196,10 +200,22 @@ class HallViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun leaveCommunity() {
+        finishOpenSit(0)
+    }
+
+    /**
+     * Ends the open-hall sit and asks the server to store the meditation log.
+     * Safe to call again after the timer completion screen.
+     */
+    fun finishOpenSit(attendedMillis: Long) {
+        if (!_state.value.inOpenHall && openSitLogged) return
+        val seconds = (attendedMillis / 1000).toInt().coerceAtLeast(0)
         localCommunityJoinedAt = 0
-        _state.value = _state.value.copy(inOpenHall = false)
+        openSitLogged = true
+        _state.value = _state.value.copy(inOpenHall = false, communityPeople = emptyList(), communityCount = 0)
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { if (useRemote) api.communityLeave() }
+            runCatching { if (useRemote) api.communityLeave(seconds) }
+            refresh()
         }
     }
 
