@@ -36,6 +36,7 @@ fun LoginScreen(
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var emailFormOpen by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -77,38 +78,46 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(20.dp))
-            TextField(
-                value = name,
-                onValueChange = { name = it.take(120) },
-                singleLine = true,
-                label = { Text("Name") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(12.dp))
-            TextField(
-                value = email,
-                onValueChange = { email = it.take(255) },
-                singleLine = true,
-                label = { Text("Email") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(12.dp))
-            TextField(
-                value = password,
-                onValueChange = { password = it.take(200) },
-                singleLine = true,
-                label = { Text("Password") },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(12.dp))
-            QuietButton(
-                text = "Continue",
-                onClick = { onName(name, email, password) },
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (!emailFormOpen) {
+                QuietButton(
+                    text = "Continue with email",
+                    onClick = { emailFormOpen = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                TextField(
+                    value = name,
+                    onValueChange = { name = it.take(120) },
+                    singleLine = true,
+                    label = { Text("Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                TextField(
+                    value = email,
+                    onValueChange = { email = it.take(255) },
+                    singleLine = true,
+                    label = { Text("Email") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                TextField(
+                    value = password,
+                    onValueChange = { password = it.take(200) },
+                    singleLine = true,
+                    label = { Text("Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                QuietButton(
+                    text = "Continue",
+                    onClick = { onName(name, email, password) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
         if (!state.error.isNullOrBlank()) {
             Spacer(Modifier.height(16.dp))
