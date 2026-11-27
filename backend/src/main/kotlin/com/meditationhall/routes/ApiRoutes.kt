@@ -79,6 +79,11 @@ fun Route.apiRoutes(
             val body = call.receive<AuthRequest>()
             call.respond(auth.updateDisplayName(user, body.displayName, body.timezone))
         }
+        post("/me/password") {
+            val user = auth.requireUser(call.request.header("Authorization"))
+            val body = call.receive<AuthRequest>()
+            call.respond(auth.setPassword(user, body.password))
+        }
         delete("/me") {
             val user = auth.requireUser(call.request.header("Authorization"))
             auth.deleteAccount(user)
@@ -157,16 +162,16 @@ fun Route.apiRoutes(
         post("/halls/{id}/sessions/ensure") {
             val user = auth.requireUser(call.request.header("Authorization"))
             val hallId = UUID.fromString(call.parameters["id"])
-            val sessionId = sessions.ensureSession(hallId)
-            call.respond(sessions.get(sessionId))
+            val sessionId = sessions.ensureSession(user, hallId)
+            call.respond(sessions.get(user, sessionId))
         }
         get("/sessions/{id}") {
-            auth.requireUser(call.request.header("Authorization"))
-            call.respond(sessions.get(UUID.fromString(call.parameters["id"])))
+            val user = auth.requireUser(call.request.header("Authorization"))
+            call.respond(sessions.get(user, UUID.fromString(call.parameters["id"])))
         }
         get("/sessions/{id}/participants") {
-            auth.requireUser(call.request.header("Authorization"))
-            call.respond(sessions.participants(UUID.fromString(call.parameters["id"])))
+            val user = auth.requireUser(call.request.header("Authorization"))
+            call.respond(sessions.participants(user, UUID.fromString(call.parameters["id"])))
         }
         post("/sessions/{id}/join") {
             val user = auth.requireUser(call.request.header("Authorization"))
@@ -197,8 +202,9 @@ fun Route.apiRoutes(
             call.respond(mapOf("ok" to true))
         }
         get("/sessions/{id}/voice") {
-            auth.requireUser(call.request.header("Authorization"))
+            val user = auth.requireUser(call.request.header("Authorization"))
             val sessionId = UUID.fromString(call.parameters["id"])
+            sessions.requireObserver(user, sessionId)
             val after = call.request.queryParameters["after"]?.toIntOrNull() ?: 0
             val live = call.request.queryParameters["live"] == "true"
             call.respond(voice.poll(sessionId, after, live))
@@ -213,9 +219,9 @@ fun Route.apiRoutes(
             call.respond(sessions.stats(user))
         }
         get("/halls/{id}/stats") {
-            auth.requireUser(call.request.header("Authorization"))
+            val user = auth.requireUser(call.request.header("Authorization"))
             val id = UUID.fromString(call.parameters["id"])
-            call.respond(sessions.hallStats(id))
+            call.respond(sessions.hallStats(user, id))
         }
 
         post("/support/requests") {
@@ -266,8 +272,12 @@ fun Route.apiRoutes(
         }
 
         webSocket("/realtime") {
-            val token = call.request.queryParameters["token"]
-            val user = auth.requireUser(if (token != null) "Bearer $token" else call.request.header("Authorization"))
+            // Browsers cannot set Authorization on a WebSocket handshake.
+            val header = call.request.header("Authorization")
+            val queryToken = call.request.queryParameters["access_token"]
+            val user = auth.requireUser(
+                header ?: queryToken?.takeIf { it.isNotBlank() }?.let { "Bearer $it" }
+            )
             hub.register(user, this)
             send(Frame.Text(json.encodeToString(WsEvent.serializer(), WsEvent(type = "SERVER_TIME", serverTimeMillis = System.currentTimeMillis()))))
             try {

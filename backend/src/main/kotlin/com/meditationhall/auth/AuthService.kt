@@ -34,6 +34,8 @@ import java.util.Date
 import java.util.UUID
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.or
@@ -43,7 +45,7 @@ import org.jetbrains.exposed.sql.update
 
 class AuthService {
     private val jwtSecret = System.getenv("JWT_SECRET")?.takeIf { it.length >= 32 }
-        ?: "dev-only-change-me-before-oci-deploy!!!!"
+        ?: error("JWT_SECRET must be set to at least 32 characters. The API will not start without it.")
     private val algorithm = Algorithm.HMAC256(jwtSecret)
     private val issuer = "sanghaworld"
     private val accessTtlMinutes = 15L
@@ -54,44 +56,94 @@ class AuthService {
 
     fun loginWithGoogle(idToken: String, device: String?): TokenResponse {
         val identity = google.verify(idToken.trim())
+        val verifiedEmail = identity.email?.trim()?.lowercase()?.takeIf { identity.emailVerified && it.isNotBlank() }
         return transaction {
-            val existing = Users.selectAll().firstOrNull { it[Users.googleSub] == identity.subject }
-                ?: identity.email?.trim()?.lowercase()?.let { address ->
-                    Users.selectAll().firstOrNull { it[Users.email]?.trim()?.lowercase() == address }
-                }
-            val userId = if (existing != null) {
-                val status = existing[Users.status]
-                if (status != "ACTIVE") {
-                    throw ApiException(HttpStatusCode.Forbidden, "ACCOUNT_${status}", "This account cannot sign in.")
-                }
-                Users.update({ Users.id eq existing[Users.id] }) {
-                    if (!identity.email.isNullOrBlank()) it[email] = identity.email.trim().lowercase()
-                    if (existing[Users.googleSub] == null) it[googleSub] = identity.subject
+            val bySub = Users.selectAll().firstOrNull { it[Users.googleSub] == identity.subject }
+            var passwordCleared = false
+            val userId = if (bySub != null) {
+                ensureActive(bySub[Users.status])
+                val unconfirmedPassword = !bySub[Users.passwordHash].isNullOrBlank() && !bySub[Users.passwordConfirmed]
+                val emailFree = verifiedEmail != null && emailOwner(verifiedEmail, bySub[Users.id]) == null
+                Users.update({ Users.id eq bySub[Users.id] }) {
+                    if (emailFree) it[email] = verifiedEmail
+                    if (unconfirmedPassword) {
+                        it[passwordHash] = null
+                        it[passwordConfirmed] = false
+                    }
                     it[updatedAt] = now()
                 }
-                existing[Users.id]
+                if (unconfirmedPassword) {
+                    revokeRefreshTokens(bySub[Users.id])
+                    passwordCleared = true
+                }
+                bySub[Users.id]
+            } else if (verifiedEmail != null) {
+                val byEmail = Users.selectAll().firstOrNull { it[Users.email]?.trim()?.lowercase() == verifiedEmail }
+                if (byEmail != null) {
+                    ensureActive(byEmail[Users.status])
+                    val linkedSub = byEmail[Users.googleSub]
+                    if (linkedSub != null && linkedSub != identity.subject) {
+                        throw ApiException(
+                            HttpStatusCode.Conflict,
+                            "EMAIL_TAKEN",
+                            "This email is already used by another Google account."
+                        )
+                    }
+                    val hadPassword = !byEmail[Users.passwordHash].isNullOrBlank()
+                    Users.update({ Users.id eq byEmail[Users.id] }) {
+                        it[googleSub] = identity.subject
+                        it[email] = verifiedEmail
+                        if (hadPassword) {
+                            it[passwordHash] = null
+                            it[passwordConfirmed] = false
+                        }
+                        it[updatedAt] = now()
+                    }
+                    if (hadPassword) {
+                        revokeRefreshTokens(byEmail[Users.id])
+                        passwordCleared = true
+                    }
+                    byEmail[Users.id]
+                } else {
+                    insertGoogleUser(identity.name, verifiedEmail, identity.subject)
+                }
             } else {
-                val id = uuid()
-                Users.insert {
-                    it[Users.id] = id
-                    it[displayName] = identity.name?.take(120)?.ifBlank { null } ?: "Practitioner"
-                    it[email] = identity.email?.trim()?.lowercase()
-                    it[googleSub] = identity.subject
-                    it[timezone] = "UTC"
-                    it[status] = "ACTIVE"
-                    it[createdAt] = now()
-                    it[updatedAt] = now()
-                }
-                id
+                insertGoogleUser(identity.name, null, identity.subject)
             }
-            issueTokens(userId, device)
+            issueTokens(userId, device).copy(passwordCleared = passwordCleared)
+        }
+    }
+
+    private fun insertGoogleUser(name: String?, email: String?, subject: String): UUID {
+        val id = uuid()
+        Users.insert {
+            it[Users.id] = id
+            it[displayName] = name?.take(120)?.ifBlank { null } ?: "Practitioner"
+            it[Users.email] = email
+            it[googleSub] = subject
+            it[timezone] = "UTC"
+            it[status] = "ACTIVE"
+            it[createdAt] = now()
+            it[updatedAt] = now()
+        }
+        return id
+    }
+
+    private fun emailOwner(address: String, except: UUID) =
+        Users.selectAll().firstOrNull {
+            it[Users.email]?.trim()?.lowercase() == address && it[Users.id] != except
+        }
+
+    private fun ensureActive(status: String) {
+        if (status != "ACTIVE") {
+            throw ApiException(HttpStatusCode.Forbidden, "ACCOUNT_$status", "This account cannot sign in.")
         }
     }
 
     fun loginWithName(displayName: String, email: String, password: String): TokenResponse {
-        val name = displayName.trim().take(120)
+        val chosenName = displayName.trim().take(120)
         val address = email.trim().lowercase().take(255)
-        if (name.length < 2) {
+        if (chosenName.length < 2) {
             throw ApiException(HttpStatusCode.BadRequest, "NAME_REQUIRED", "Enter the name you want others to see.")
         }
         if (!address.matches(Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"))) {
@@ -114,24 +166,25 @@ class AuthService {
                     throw ApiException(
                         HttpStatusCode.Forbidden,
                         "USE_GOOGLE",
-                        "This email is signed in with Google."
+                        "This email signs in with Google. On a device where Google opens, set a password from My Space, then use that password here."
                     )
                 }
                 if (!passwordMatches(password, stored)) {
                     throw ApiException(HttpStatusCode.Unauthorized, "BAD_PASSWORD", "That password does not match this email.")
                 }
                 Users.update({ Users.id eq existing[Users.id] }) {
-                    it[displayName] = name
-                    it[updatedAt] = now()
+                    it[Users.displayName] = chosenName
+                    it[Users.updatedAt] = now()
                 }
                 existing[Users.id]
             } else {
                 val id = uuid()
                 Users.insert {
                     it[Users.id] = id
-                    it[Users.displayName] = name
+                    it[Users.displayName] = chosenName
                     it[Users.email] = address
-                    it[passwordHash] = hashPassword(password)
+                    it[Users.passwordHash] = hashPassword(password)
+                    it[Users.passwordConfirmed] = false
                     it[timezone] = "UTC"
                     it[status] = "ACTIVE"
                     it[createdAt] = now()
@@ -147,7 +200,7 @@ class AuthService {
         val salt = ByteArray(16).also { random.nextBytes(it) }
         val hash = pbkdf2(password, salt)
         val enc = Base64.getEncoder()
-        return "pbkdf2$120000$${enc.encodeToString(salt)}$${enc.encodeToString(hash)}"
+        return "pbkdf2$" + "120000$" + enc.encodeToString(salt) + "$" + enc.encodeToString(hash)
     }
 
     private fun passwordMatches(password: String, stored: String): Boolean {
@@ -267,6 +320,24 @@ class AuthService {
         return transaction { assertActive(userId) }
     }
 
+    fun setPassword(userId: UUID, password: String): TokenResponse {
+        if (password.length < 8) {
+            throw ApiException(HttpStatusCode.BadRequest, "PASSWORD_REQUIRED", "Use a password of at least 8 characters.")
+        }
+        return transaction {
+            assertActive(userId)
+            val row = Users.selectAll().first { it[Users.id] == userId }
+            val replacing = !row[Users.passwordHash].isNullOrBlank()
+            Users.update({ Users.id eq userId }) {
+                it[passwordHash] = hashPassword(password)
+                it[passwordConfirmed] = true
+                it[updatedAt] = now()
+            }
+            if (replacing) revokeRefreshTokens(userId)
+            issueTokens(userId, "android-password")
+        }
+    }
+
     fun updateDisplayName(userId: UUID, displayName: String, timezone: String = ""): MeResponse = transaction {
         val name = displayName.trim().take(120)
         val zone = timezone.trim().take(64)
@@ -298,7 +369,8 @@ class AuthService {
             userId = row[Users.id].toString(),
             displayName = row[Users.displayName],
             email = row[Users.email],
-            status = row[Users.status]
+            status = row[Users.status],
+            hasPassword = !row[Users.passwordHash].isNullOrBlank()
         )
     }
 
@@ -335,8 +407,17 @@ class AuthService {
             refreshToken = refreshRaw,
             expiresInSeconds = accessTtlMinutes * 60,
             userId = userId.toString(),
-            displayName = user[Users.displayName]
+            displayName = user[Users.displayName],
+            hasPassword = !user[Users.passwordHash].isNullOrBlank()
         )
+    }
+
+    private fun revokeRefreshTokens(userId: UUID) {
+        RefreshTokens.update({
+            (RefreshTokens.userId eq userId) and (RefreshTokens.revokedAt.isNull())
+        }) {
+            it[revokedAt] = now()
+        }
     }
 
     private fun newRefreshToken(): String {

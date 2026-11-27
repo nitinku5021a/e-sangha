@@ -23,6 +23,8 @@ JWT_SECRET=<at least 32 random characters>
 AUTH_DEV_ENABLED=false
 ```
 
+The process exits on startup if `JWT_SECRET` is missing or shorter than 32 characters.
+
 Google Sign-In:
 
 ```bash

@@ -25,7 +25,9 @@ data class TokenResponse(
     val refreshToken: String,
     val expiresInSeconds: Long,
     val userId: String,
-    val displayName: String
+    val displayName: String,
+    val hasPassword: Boolean = false,
+    val passwordCleared: Boolean = false
 )
 
 @Serializable
@@ -33,7 +35,8 @@ data class MeResponse(
     val userId: String,
     val displayName: String,
     val email: String? = null,
-    val status: String
+    val status: String,
+    val hasPassword: Boolean = false
 )
 
 @Serializable

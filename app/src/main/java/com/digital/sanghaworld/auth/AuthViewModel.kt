@@ -15,6 +15,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.digital.sanghaworld.BuildConfig
 import com.digital.sanghaworld.hall.HallApi
 import java.security.SecureRandom
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,9 @@ data class AuthUiState(
     val ready: Boolean = false,
     val signedIn: Boolean = false,
     val displayName: String? = null,
+    val email: String? = null,
+    val hasPassword: Boolean = true,
+    val passwordCleared: Boolean = false,
     val loading: Boolean = false,
     val error: String? = null
 )
@@ -39,10 +43,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             val signedIn = withContext(Dispatchers.IO) { restore() }
+            val profile = if (signedIn) withContext(Dispatchers.IO) { accountProfile() } else null
             if (signedIn) {
                 withContext(Dispatchers.IO) { runCatching { api.syncTimezone() } }
             }
-            _state.value = AuthUiState(ready = true, signedIn = signedIn, displayName = tokens.displayName)
+            _state.value = AuthUiState(
+                ready = true,
+                signedIn = signedIn,
+                displayName = tokens.displayName,
+                email = profile?.email,
+                hasPassword = profile?.hasPassword ?: true
+            )
         }
     }
 
@@ -65,20 +76,26 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             val login = withContext(Dispatchers.IO) {
                 runCatching { api.loginWithGoogle(idToken) }
             }
-            val ok = login.getOrDefault(false)
-            if (ok) {
-                withContext(Dispatchers.IO) { runCatching { api.syncTimezone() } }
+            val cleared = login.getOrNull() == true
+            val ok = login.isSuccess
+            val profile = if (ok) withContext(Dispatchers.IO) {
+                runCatching { api.syncTimezone() }
+                accountProfile()
+            } else {
+                null
             }
-            val loginError = login.exceptionOrNull()?.message
             _state.value = AuthUiState(
                 ready = true,
                 signedIn = ok,
                 displayName = tokens.displayName,
+                email = profile?.email,
+                hasPassword = profile?.hasPassword ?: !cleared,
+                passwordCleared = cleared,
                 loading = false,
                 error = when {
                     ok -> null
-                    !loginError.isNullOrBlank() -> loginError
-                    else -> "Could not reach the server or Google token was rejected."
+                    else -> readableError(login.exceptionOrNull())
+                        ?: "Could not reach the server or Google token was rejected."
                 }
             )
         }
@@ -104,23 +121,50 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             val login = withContext(Dispatchers.IO) {
                 runCatching { api.loginWithName(name, address, password) }
             }
-            val ok = login.getOrDefault(false)
-            if (ok) {
-                withContext(Dispatchers.IO) { runCatching { api.syncTimezone() } }
+            val ok = login.isSuccess
+            val profile = if (ok) withContext(Dispatchers.IO) {
+                runCatching { api.syncTimezone() }
+                accountProfile()
+            } else {
+                null
             }
-            val loginError = login.exceptionOrNull()?.message
             _state.value = AuthUiState(
                 ready = true,
                 signedIn = ok,
                 displayName = tokens.displayName,
+                email = profile?.email,
+                hasPassword = profile?.hasPassword ?: true,
                 loading = false,
                 error = when {
                     ok -> null
-                    !loginError.isNullOrBlank() -> loginError
-                    else -> "Could not reach the server."
+                    else -> readableError(login.exceptionOrNull()) ?: "Could not reach the server."
                 }
             )
         }
+    }
+
+    fun setPassword(password: String, onDone: (Boolean) -> Unit = {}) {
+        if (password.length < 8) {
+            _state.value = _state.value.copy(error = "Use a password of at least 8 characters.")
+            onDone(false)
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(loading = true, error = null)
+            val result = withContext(Dispatchers.IO) { runCatching { api.setPassword(password) } }
+            val ok = result.isSuccess
+            _state.value = _state.value.copy(
+                loading = false,
+                hasPassword = if (ok) true else _state.value.hasPassword,
+                passwordCleared = if (ok) false else _state.value.passwordCleared,
+                error = if (ok) null else readableError(result.exceptionOrNull()) ?: "Could not save the password."
+            )
+            onDone(ok)
+        }
+    }
+
+    fun dismissPasswordPrompt() {
+        _state.value = _state.value.copy(passwordCleared = false)
     }
 
     fun signOut() {
@@ -157,6 +201,26 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { api.updateDisplayName(trimmed) }
         }
+    }
+
+    private data class AccountProfile(val email: String?, val hasPassword: Boolean)
+
+    private fun accountProfile(): AccountProfile? {
+        val me = runCatching { api.me() }.getOrNull() ?: return null
+        val email = me.optString("email").takeIf { it.isNotBlank() }
+        return AccountProfile(email, me.optBoolean("hasPassword", false))
+    }
+
+    private fun readableError(error: Throwable?): String? {
+        val raw = error?.message ?: return null
+        val jsonStart = raw.indexOf('{')
+        if (jsonStart >= 0) {
+            val message = runCatching {
+                JSONObject(raw.substring(jsonStart)).optJSONObject("error")?.optString("message")
+            }.getOrNull()
+            if (!message.isNullOrBlank()) return message
+        }
+        return raw
     }
 
     private fun restore(): Boolean {

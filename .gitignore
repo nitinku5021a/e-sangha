@@ -28,3 +28,7 @@ tmp_test.txt
 
 # Local backend data
 backend/data/
+
+# Web client
+web/node_modules/
+web/dist/

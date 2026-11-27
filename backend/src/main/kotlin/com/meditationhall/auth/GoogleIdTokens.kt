@@ -12,7 +12,8 @@ import java.net.URI
 data class GoogleIdentity(
     val subject: String,
     val email: String?,
-    val name: String?
+    val name: String?,
+    val emailVerified: Boolean
 )
 
 class GoogleIdTokens(
@@ -43,10 +44,13 @@ class GoogleIdTokens(
         }
         val sub = claims.subject?.takeIf { it.isNotBlank() }
             ?: throw ApiException(HttpStatusCode.Unauthorized, "INVALID_GOOGLE_TOKEN", "Token is missing subject.")
+        val verifiedClaim = claims.getClaim("email_verified")
+        val emailVerified = verifiedClaim is Boolean && verifiedClaim
         return GoogleIdentity(
             subject = sub,
             email = claims.getStringClaim("email"),
-            name = claims.getStringClaim("name")
+            name = claims.getStringClaim("name"),
+            emailVerified = emailVerified
         )
     }
 }

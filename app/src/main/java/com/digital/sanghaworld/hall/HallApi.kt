@@ -19,6 +19,7 @@ class HallApi(
     private val refreshLock = Any()
     fun isConfigured(): Boolean = tokens.isSignedIn()
 
+    /** @return true when this Google sign-in removed an unverified password on the same email. */
     fun loginWithGoogle(idToken: String): Boolean {
         val res = request(
             "POST",
@@ -27,7 +28,16 @@ class HallApi(
             auth = false
         )
         saveTokens(res)
-        return true
+        return res.optBoolean("passwordCleared", false)
+    }
+
+    fun setPassword(password: String) {
+        val res = request(
+            "POST",
+            "/v1/me/password",
+            JSONObject().put("password", password)
+        )
+        if (res.has("accessToken")) saveTokens(res)
     }
 
     fun loginWithName(displayName: String, email: String, password: String): Boolean {
@@ -238,6 +248,7 @@ class HallApi(
     )
 
     fun ensureAndJoinSession(hallId: String): JoinedSession {
+        runCatching { joinHall(hallId) }
         val session = request("POST", "/v1/halls/$hallId/sessions/ensure")
         val sessionId = session.getString("id")
         val joined = request("POST", "/v1/sessions/$sessionId/join")

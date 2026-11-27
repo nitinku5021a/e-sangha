@@ -44,11 +44,14 @@ class RealtimeHub {
         presence[sessionId]?.entries?.removeIf { it.value < cutoff }
     }
 
-    suspend fun broadcast(event: WsEvent) {
+    suspend fun broadcast(event: WsEvent, recipientUserIds: Set<UUID>) {
+        if (recipientUserIds.isEmpty()) return
         val payload = json.encodeToString(event)
-        val snapshot = sessions.keys.toList()
-        snapshot.forEach { socket ->
-            runCatching { socket.send(Frame.Text(payload)) }
+        val snapshot = sessions.entries.map { it.key to it.value }
+        snapshot.forEach { (socket, userId) ->
+            if (userId in recipientUserIds) {
+                runCatching { socket.send(Frame.Text(payload)) }
+            }
         }
     }
 }

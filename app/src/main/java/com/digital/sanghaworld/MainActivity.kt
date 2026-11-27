@@ -79,6 +79,7 @@ import com.digital.sanghaworld.hall.ScheduleType
 import com.digital.sanghaworld.logging.MeditationLogStore
 import com.digital.sanghaworld.ui.LoginScreen
 import com.digital.sanghaworld.ui.MySpaceScreen
+import com.digital.sanghaworld.ui.SetPasswordDialog
 import java.io.File
 import com.digital.sanghaworld.ui.TimerScreen
 import com.digital.sanghaworld.ui.hall.CommunitySupportScreen
@@ -306,6 +307,14 @@ fun VipassanaApp(
             onName = { name, email, password -> authViewModel.signInWithName(name, email, password) }
         )
         return
+    }
+    if (authState.passwordCleared) {
+        SetPasswordDialog(
+            title = "Set a password for this account",
+            body = "Google sign-in replaced the password on this email. Your sittings stay on this account. Set a new password to use Continue with email on a phone where Google does not open.",
+            onDismiss = { authViewModel.dismissPasswordPrompt() },
+            onSave = { authViewModel.setPassword(it) }
+        )
     }
 
     fun showHome() {
@@ -845,6 +854,9 @@ fun VipassanaApp(
                                     if (ok) showHome()
                                 }
                             },
+                            email = authState.email,
+                            hasPassword = authState.hasPassword,
+                            onSetPassword = { authViewModel.setPassword(it) },
                             onOpenHall = { card ->
                                 hallViewModel.openHall(card.hall.id)
                                 detailsFromRoom = false

@@ -39,7 +39,7 @@ class SessionScheduler(
     private fun generateUpcoming() {
         transaction {
             Halls.selectAll().filter { it[Halls.status] == "ACTIVE" }.forEach { hall ->
-                runCatching { sessions.ensureSession(hall[Halls.id]) }
+                runCatching { sessions.ensureUpcoming(hall[Halls.id]) }
             }
         }
     }

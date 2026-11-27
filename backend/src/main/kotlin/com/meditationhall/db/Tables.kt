@@ -10,6 +10,7 @@ object Users : Table("users") {
     val displayName = varchar("display_name", 120)
     val email = varchar("email", 255).nullable()
     val passwordHash = varchar("password_hash", 255).nullable()
+    val passwordConfirmed = bool("password_confirmed").default(false)
     val googleSub = varchar("google_sub", 64).nullable().uniqueIndex()
     val timezone = varchar("timezone", 64)
     val status = varchar("status", 24)

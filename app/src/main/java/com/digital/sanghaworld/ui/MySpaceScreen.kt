@@ -34,6 +34,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,26 +71,33 @@ fun MySpaceScreen(
     onName: (String) -> Unit,
     onDeleteAccount: () -> Unit = {},
     onOpenHall: (HallCard) -> Unit = {},
+    email: String? = null,
+    hasPassword: Boolean = true,
+    onSetPassword: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     when (page) {
         "practice" -> PracticeLog(logs, sittings, modifier)
         "halls" -> ScheduledHalls(halls, onOpenHall, modifier)
         "settings" -> GongSettingsScreen(modifier)
-        else -> SpaceHome(displayName, onOpen, onName, onDeleteAccount, modifier)
+        else -> SpaceHome(displayName, email, hasPassword, onOpen, onName, onSetPassword, onDeleteAccount, modifier)
     }
 }
 
 @Composable
 private fun SpaceHome(
     displayName: String,
+    email: String?,
+    hasPassword: Boolean,
     onOpen: (String) -> Unit,
     onName: (String) -> Unit,
+    onSetPassword: (String) -> Unit,
     onDeleteAccount: () -> Unit,
     modifier: Modifier
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
+    var settingPassword by remember { mutableStateOf(false) }
     var draft by remember(displayName) { mutableStateOf(displayName) }
     if (editing) {
         AlertDialog(
@@ -127,6 +138,16 @@ private fun SpaceHome(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(4.dp))
+                if (!email.isNullOrBlank()) {
+                    Text(
+                        email,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.62f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
                 Text(
                     "Edit name",
                     style = MaterialTheme.typography.bodyMedium,
@@ -142,6 +163,9 @@ private fun SpaceHome(
         MenuRow(Icons.Outlined.SelfImprovement, "My Practice") { onOpen("practice") }
         MenuRow(Icons.Outlined.Schedule, "My Scheduled Halls") { onOpen("halls") }
         MenuRow(Icons.Outlined.Settings, "Settings") { onOpen("settings") }
+        if (!hasPassword) {
+            MenuRow(Icons.Outlined.Person, "Set a password") { settingPassword = true }
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             "Delete account",
@@ -152,6 +176,17 @@ private fun SpaceHome(
                 .padding(vertical = 16.dp)
         )
         Spacer(Modifier.height(24.dp))
+    }
+    if (settingPassword) {
+        SetPasswordDialog(
+            title = "Set a password",
+            body = "Use this email and password on a phone where Google sign-in does not open. It enters the same account and sitting log.",
+            onDismiss = { settingPassword = false },
+            onSave = {
+                settingPassword = false
+                onSetPassword(it)
+            }
+        )
     }
     if (confirmDelete) {
         AlertDialog(
@@ -174,6 +209,66 @@ private fun SpaceHome(
             containerColor = MaterialTheme.colorScheme.background
         )
     }
+}
+
+@Composable
+fun SetPasswordDialog(
+    title: String,
+    body: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var localError by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, style = MaterialTheme.typography.headlineSmall) },
+        text = {
+            Column {
+                Text(body, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(16.dp))
+                TextField(
+                    value = password,
+                    onValueChange = { password = it.take(200) },
+                    singleLine = true,
+                    label = { Text("Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                TextField(
+                    value = confirm,
+                    onValueChange = { confirm = it.take(200) },
+                    singleLine = true,
+                    label = { Text("Confirm password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (!localError.isNullOrBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(localError.orEmpty(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                when {
+                    password.length < 8 -> localError = "Use a password of at least 8 characters."
+                    password != confirm -> localError = "Those passwords do not match."
+                    else -> onSave(password)
+                }
+            }) { Text("Save", color = MaterialTheme.colorScheme.primary) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Not now", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    )
 }
 
 @Composable

@@ -2,6 +2,7 @@ package com.meditationhall.services
 
 import com.meditationhall.ApiException
 import com.meditationhall.db.Attendance
+import com.meditationhall.db.HallMemberships
 import com.meditationhall.db.Halls
 import com.meditationhall.db.MeditationLogs
 import com.meditationhall.db.MeditationSessions
@@ -27,7 +28,15 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 
 class SessionService(private val hub: RealtimeHub) {
-    fun ensureSession(hallId: UUID): UUID = transaction {
+    fun ensureSession(userId: UUID, hallId: UUID): UUID = transaction {
+        assertMember(userId, hallId)
+        openUpcoming(hallId)
+    }
+
+    /** Scheduler path. Creates the next sitting without a member request. */
+    fun ensureUpcoming(hallId: UUID): UUID = transaction { openUpcoming(hallId) }
+
+    private fun openUpcoming(hallId: UUID): UUID {
         val hall = Halls.selectAll().first { it[Halls.id] == hallId }
         val schedule = com.meditationhall.db.HallSchedules.selectAll()
             .firstOrNull { it[com.meditationhall.db.HallSchedules.hallId] == hallId }
@@ -45,7 +54,7 @@ class SessionService(private val hub: RealtimeHub) {
         val existing = MeditationSessions.selectAll().firstOrNull {
             it[MeditationSessions.hallId] == hallId && it[MeditationSessions.scheduledStart] == start
         }
-        if (existing != null) return@transaction existing[MeditationSessions.id]
+        if (existing != null) return existing[MeditationSessions.id]
         val id = uuid()
         val remaining = ScheduleMath.remainingSeconds(startMillis, hall[Halls.durationSeconds])
         MeditationSessions.insert {
@@ -60,7 +69,10 @@ class SessionService(private val hub: RealtimeHub) {
         id
     }
 
-    fun get(sessionId: UUID): SessionDto = transaction { toDto(sessionId) }
+    fun get(userId: UUID, sessionId: UUID): SessionDto = transaction {
+        assertCanObserve(userId, sessionId)
+        toDto(sessionId)
+    }
 
     /** Hall creator and the instant the scheduled sitting ends. */
     fun voiceGate(sessionId: UUID): Pair<UUID, Long> = transaction {
@@ -75,7 +87,8 @@ class SessionService(private val hub: RealtimeHub) {
         hall[Halls.creatorId] to endMillis
     }
 
-    fun participants(sessionId: UUID): List<ParticipantDto> = transaction {
+    fun participants(userId: UUID, sessionId: UUID): List<ParticipantDto> = transaction {
+        assertCanObserve(userId, sessionId)
         MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
             ?: throw ApiException(HttpStatusCode.NotFound, "SESSION_NOT_FOUND", "Session not found.")
         Attendance.selectAll()
@@ -94,6 +107,7 @@ class SessionService(private val hub: RealtimeHub) {
         val dto = transaction {
             val session = MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
                 ?: throw ApiException(HttpStatusCode.NotFound, "SESSION_NOT_FOUND", "Session not found.")
+            assertMember(userId, session[MeditationSessions.hallId])
             val start = session[MeditationSessions.scheduledStart]
             val end = start.plusSeconds(session[MeditationSessions.durationSeconds].toLong())
             val now = Instant.now()
@@ -124,10 +138,11 @@ class SessionService(private val hub: RealtimeHub) {
         }
         hub.heartbeat(sessionId, userId)
         runBlocking {
-            hub.broadcast(
+            fanout(
                 WsEvent(
                     type = "PARTICIPANT_JOINED",
                     sessionId = sessionId.toString(),
+                    hallId = dto.hallId,
                     userId = userId.toString(),
                     participantCount = hub.count(sessionId),
                     serverTimeMillis = System.currentTimeMillis()
@@ -182,10 +197,11 @@ class SessionService(private val hub: RealtimeHub) {
         }
         hub.leave(sessionId, userId)
         runBlocking {
-            hub.broadcast(
+            fanout(
                 WsEvent(
                     type = "PARTICIPANT_LEFT",
                     sessionId = sessionId.toString(),
+                    hallId = rowHallId(sessionId),
                     userId = userId.toString(),
                     participantCount = hub.count(sessionId),
                     serverTimeMillis = System.currentTimeMillis()
@@ -220,7 +236,8 @@ class SessionService(private val hub: RealtimeHub) {
         )
     }
 
-    fun hallStats(hallId: UUID): HallStatsDto = transaction {
+    fun hallStats(userId: UUID, hallId: UUID): HallStatsDto = transaction {
+        assertMember(userId, hallId)
         val logs = MeditationLogs.selectAll().filter { it[MeditationLogs.hallId] == hallId }
         val att = Attendance.selectAll().filter { it[Attendance.hallId] == hallId }
         val sessionIds = (logs.map { it[MeditationLogs.sessionId] } + att.map { it[Attendance.sessionId] }).distinct()
@@ -249,7 +266,7 @@ class SessionService(private val hub: RealtimeHub) {
                             it[actualStart] = start
                         }
                         runBlocking {
-                            hub.broadcast(
+                            fanout(
                                 WsEvent(
                                     type = "SESSION_STARTED",
                                     sessionId = id.toString(),
@@ -264,7 +281,7 @@ class SessionService(private val hub: RealtimeHub) {
                         if (row[MeditationSessions.status] in listOf("SCHEDULED", "STARTING", "ACTIVE")) {
                             MeditationSessions.update({ MeditationSessions.id eq id }) { it[status] = "COMPLETED" }
                             runBlocking {
-                                hub.broadcast(
+                                fanout(
                                     WsEvent(
                                         type = "SESSION_COMPLETED",
                                         sessionId = id.toString(),
@@ -302,5 +319,63 @@ class SessionService(private val hub: RealtimeHub) {
             participantCount = count,
             remainingSeconds = remaining
         )
+    }
+
+    /** Voice, participant names, and session details are for members and people in the sitting. */
+    fun requireObserver(userId: UUID, sessionId: UUID) {
+        transaction { assertCanObserve(userId, sessionId) }
+    }
+
+    private fun assertMember(userId: UUID, hallId: UUID) {
+        val hall = Halls.selectAll().firstOrNull { it[Halls.id] == hallId }
+            ?: throw ApiException(HttpStatusCode.NotFound, "HALL_NOT_FOUND", "Hall not found.")
+        if (hall[Halls.creatorId] == userId) return
+        val member = HallMemberships.selectAll().any {
+            it[HallMemberships.hallId] == hallId && it[HallMemberships.userId] == userId
+        }
+        if (!member) {
+            throw ApiException(HttpStatusCode.Forbidden, "NOT_MEMBER", "Join this hall before entering the sitting.")
+        }
+    }
+
+    private fun assertCanObserve(userId: UUID, sessionId: UUID) {
+        val session = MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
+            ?: throw ApiException(HttpStatusCode.NotFound, "SESSION_NOT_FOUND", "Session not found.")
+        val hallId = session[MeditationSessions.hallId]
+        val hall = Halls.selectAll().firstOrNull { it[Halls.id] == hallId } ?: return
+        if (hall[Halls.creatorId] == userId) return
+        val member = HallMemberships.selectAll().any {
+            it[HallMemberships.hallId] == hallId && it[HallMemberships.userId] == userId
+        }
+        if (member) return
+        val attended = Attendance.selectAll().any {
+            it[Attendance.sessionId] == sessionId && it[Attendance.userId] == userId
+        }
+        if (!attended) {
+            throw ApiException(HttpStatusCode.Forbidden, "NOT_MEMBER", "Join this hall before entering the sitting.")
+        }
+    }
+
+    private fun rowHallId(sessionId: UUID): String = transaction {
+        MeditationSessions.selectAll().firstOrNull { it[MeditationSessions.id] == sessionId }
+            ?.get(MeditationSessions.hallId)?.toString().orEmpty()
+    }
+
+    private fun fanout(event: WsEvent) {
+        val hallId = event.hallId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return
+        val sessionId = event.sessionId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return
+        val recipients = transaction { audience(hallId, sessionId) }
+        runBlocking { hub.broadcast(event, recipients) }
+    }
+
+    private fun audience(hallId: UUID, sessionId: UUID): Set<UUID> {
+        val members = HallMemberships.selectAll()
+            .filter { it[HallMemberships.hallId] == hallId }
+            .map { it[HallMemberships.userId] }
+        val present = Attendance.selectAll()
+            .filter { it[Attendance.sessionId] == sessionId && it[Attendance.leftAt] == null }
+            .map { it[Attendance.userId] }
+        val creator = Halls.selectAll().firstOrNull { it[Halls.id] == hallId }?.get(Halls.creatorId)
+        return (members + present + listOfNotNull(creator)).toSet()
     }
 }
